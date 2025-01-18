@@ -45,8 +45,3 @@ runhaskell ./Summerize.hs
 
 - Automatic time extension for book close to the delay
 - Advanced UI (possibly for phone)
-- Rewrite the crappy shell script into haskell
-
-# Design
-
-I've done reverse engineering to understand the login process and everything is in the `login_and_get.sh` file.

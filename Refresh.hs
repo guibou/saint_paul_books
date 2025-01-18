@@ -1,22 +1,26 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Refresh where
 
+import Api
 import Data.Aeson
+import Data.Text (Text)
 import Data.Traversable (for)
 import GHC.Generics
 import System.Process (callProcess)
 
 data User = User
-  { user :: String,
-    password :: String,
+  { user :: Text,
+    password :: Text,
     name :: String
   }
   deriving (FromJSON, Generic, Show)
 
 main = do
   Just users <- decodeFileStrict @[User] "credentials.json"
-  for users $ \user -> do
-    callProcess "sh" ["login_and_get.sh", user.user, user.password, user.name]
-  print users
+  for users $ \User {..} -> do
+    auth <- login (Credential {..})
+    items <- getLoan auth
+    encodeFile ("result_" <> name <> ".json") items

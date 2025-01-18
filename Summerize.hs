@@ -39,10 +39,9 @@ cleanDate = parseTimeM False defaultTimeLocale "%Y%m%d"
 cleanTitle :: Text -> Text
 cleanTitle = Text.strip . Text.takeWhile (/= '[')
 
+red, yellow, green :: String -> String
 red t = "\ESC[31;1;4m" <> t <> "\ESC[0m"
-
 yellow t = "\ESC[33;1;4m" <> t <> "\ESC[0m"
-
 green t = "\ESC[32;1;4m" <> t <> "\ESC[0m"
 
 formatItem :: Day -> Int -> Item -> Text
@@ -63,12 +62,11 @@ main = do
   let names = fmap (.name) users
 
   peoples <- forM names $ \name -> do
-    contentM <- decodeFileStrict @Payload ("result_" <> name <> ".json")
+    contentM <- decodeFileStrict @[Item] ("result_" <> name <> ".json")
 
     case contentM of
       Nothing -> pure (name, [])
-      Just content -> do
-        let items = content.response.items
+      Just items -> do
         pure (name, sortBy (comparing (.dueDate)) items)
 
   today <- (.utctDay) <$> getCurrentTime
