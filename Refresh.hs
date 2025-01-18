@@ -21,7 +21,9 @@ data User = User
 
 main = do
   Just users <- decodeFileStrict @[User] "credentials.json"
-  forConcurrently users $ \User {..} -> do
+  items <- forConcurrently users $ \User {..} -> do
     auth <- login (Credential {..})
     items <- getLoan auth
-    encodeFile ("result_" <> name <> ".json") items
+    -- TODO: handle error here
+    pure (name, items)
+  encodeFile ".iguana.json" items

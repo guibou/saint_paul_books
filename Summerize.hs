@@ -8,17 +8,14 @@
 
 {-# OPTIONS -Wall #-}
 
-import Control.Monad (forM, forM_)
+import Control.Monad (forM_)
 import Data.Aeson
-import Data.List (sortBy)
-import Data.Ord (comparing)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Data.Time
 import GHC.Generics (Generic)
 import PyF
-import Refresh (User (..))
 
 data Payload = Payload {response :: Response}
   deriving (Show, FromJSON, Generic)
@@ -58,16 +55,7 @@ formatItem today maxTitleLength item = [fmt| • {item.title: {maxTitleLength}} 
 
 main :: IO ()
 main = do
-  Just users <- decodeFileStrict @[User] "credentials.json"
-  let names = fmap (.name) users
-
-  peoples <- forM names $ \name -> do
-    contentM <- decodeFileStrict @[Item] ("result_" <> name <> ".json")
-
-    case contentM of
-      Nothing -> pure (name, [])
-      Just items -> do
-        pure (name, sortBy (comparing (.dueDate)) items)
+  Just peoples <- decodeFileStrict @[(Text, [Item])] ".iguana.json"
 
   today <- (.utctDay) <$> getCurrentTime
 
@@ -77,7 +65,7 @@ main = do
         pure (Text.length item.title)
 
   forM_ peoples $ \(name, items) -> do
-    putStrLn $ [fmt|{Text.toTitle $ Text.pack name} |] <> mkSummary (length items) 10
+    putStrLn $ [fmt|{Text.toTitle name} |] <> mkSummary (length items) 10
     forM_ items $ \item -> do
       Text.putStrLn $ formatItem today maxTextLength item
 
