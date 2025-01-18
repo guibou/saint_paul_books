@@ -3,8 +3,10 @@ user=$1
 password=$2
 username=$3
 
+iguana_root="https://mediatheques-saintpaul.re/iguana"
+
 # Get the first sessionId and associated cookie jar
-sessionId=$(curl 'https://mediatheques-saintpaul.re/iguana/www.main.cls?surl=useractivities'\
+sessionId=$(curl "$iguana_root/www.main.cls?surl=useractivities"\
     -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:134.0) Gecko/20100101 Firefox/134.0'\
     -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'\
     -H 'Accept-Language: en-US,en;q=0.5'\
@@ -20,7 +22,7 @@ sessionId=$(curl 'https://mediatheques-saintpaul.re/iguana/www.main.cls?surl=use
 echo $sessionId
 
 # Login
-curl "https://mediatheques-saintpaul.re/iguana/Rest.Server.cls?sessionId=$sessionId&method=user/credentials"\
+curl "$iguana_root/Rest.Server.cls?sessionId=$sessionId&method=user/credentials"\
     -X POST\
     -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0'\
     -H 'Accept: */*'\
@@ -29,7 +31,8 @@ curl "https://mediatheques-saintpaul.re/iguana/Rest.Server.cls?sessionId=$sessio
     -H 'Content-Type: application/json'\
     -H 'Origin: https://mediatheques-saintpaul.re'\
     -H 'Connection: keep-alive'\
-    -H 'Referer: https://mediatheques-saintpaul.re/iguana/www.main.cls?surl=useractivities' -b cookie_jar -c cookie_jar\
+    -H "Referer: $iguana_root/www.main.cls?surl=useractivities"\
+    -b cookie_jar -c cookie_jar\
     -H 'Cookie: cookieControl=true; cookieControlPrefs=%5B%22preferences%22%2C%22analytics%22%2C%22marketing%22%5D'\
     -H 'Sec-Fetch-Dest: empty'\
     -H 'Sec-Fetch-Mode: cors'\
@@ -42,7 +45,7 @@ getSessionId=$(jq -r '.response.sessionId' login_infos)
 getToken=$(jq -r '.response.token' login_infos)
 
 # Get
-curl "https://mediatheques-saintpaul.re/iguana/Rest.Server.cls?sessionId=$sessionId&method=user/loans" \
+curl "$iguana_root/Rest.Server.cls?sessionId=$sessionId&method=user/loans" \
   -X POST \
   -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0' \
   -H 'Accept: */*' \
@@ -51,7 +54,7 @@ curl "https://mediatheques-saintpaul.re/iguana/Rest.Server.cls?sessionId=$sessio
   -H 'Content-Type: application/json' \
   -H 'Origin: https://mediatheques-saintpaul.re' \
   -H 'Connection: keep-alive' \
-  -H 'Referer: https://mediatheques-saintpaul.re/iguana/www.main.cls?surl=useractivities' \
+  -H "Referer: $iguana_root/www.main.cls?surl=useractivities" \
   -b cookie_jar \
   -H 'Cookie: cookieControl=true; cookieControlPrefs=%5B%22preferences%22%2C%22analytics%22%2C%22marketing%22%5D' \
   -H 'Sec-Fetch-Dest: empty' \

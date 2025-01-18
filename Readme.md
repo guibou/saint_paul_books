@@ -4,6 +4,8 @@ In summary, this is a limited access to https://mediatheques-saintpaul.re, for
 multiple account, allowing to list your books and how much time you can keep
 them.
 
+With a bit of setup, it should also work for any "Iguana" based library website, look for `iguana_root` in the code.
+
 # Features:
 
 - Automated login process for multiple accounts
