@@ -8,6 +8,7 @@
             p.PyF
             p.req
             p.lens-regex-pcre
+            p.async
           ]))
         ];
       };

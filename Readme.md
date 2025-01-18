@@ -45,3 +45,4 @@ runhaskell ./Summerize.hs
 
 - Automatic time extension for book close to the delay
 - Advanced UI (possibly for phone)
+- Split auth and query, so we can reuse already authenticated users.

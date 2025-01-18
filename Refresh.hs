@@ -5,6 +5,7 @@
 module Refresh where
 
 import Api
+import Control.Concurrent.Async (forConcurrently)
 import Data.Aeson
 import Data.Text (Text)
 import Data.Traversable (for)
@@ -20,7 +21,7 @@ data User = User
 
 main = do
   Just users <- decodeFileStrict @[User] "credentials.json"
-  for users $ \User {..} -> do
+  forConcurrently users $ \User {..} -> do
     auth <- login (Credential {..})
     items <- getLoan auth
     encodeFile ("result_" <> name <> ".json") items
