@@ -1,35 +1,39 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-partial-type-signatures #-}
 
 {-
  - Api for iguana library
  -}
 module Api where
 
+import Control.Concurrent.Async (forConcurrently)
 import Control.Lens (ix, (^..))
 import Control.Lens.Regex.ByteString
 import Data.Aeson
 import Data.Text
-import Data.Text (Text)
-import Data.Text qualified as Text
 import Data.Text.Encoding (decodeUtf8)
-import Data.Time
-import Data.Time (Day)
 import GHC.Generics
 import Network.HTTP.Client (CookieJar)
 import Network.HTTP.Req
 
+sessionIdRegex :: _
 sessionIdRegex = [regex|Vfocus.Settings.sessionID = '(.*)';|]
 
 -- | Represents the root of the iguana library
 --
 -- In the future this could be set as an API parameter so it may query other
 -- iguana libraries
+iguana_root :: Url Https
 iguana_root = https "mediatheques-saintpaul.re" /: "iguana"
 
 -- | represents credentials for login
@@ -56,23 +60,6 @@ data Auth = Auth
     cookies :: CookieJar
   }
   deriving (Show)
-
--- | A book loan
-data Item = Item
-  { title :: Text,
-    dueDate :: Day
-  }
-  deriving (Show, ToJSON, Generic)
-
-cleanDate :: (MonadFail m) => String -> m Day
-cleanDate = parseTimeM False defaultTimeLocale "%Y%m%d"
-
-cleanTitle :: Text -> Text
-cleanTitle = Text.strip . Text.takeWhile (/= '[')
-
-instance FromJSON Item where
-  parseJSON = withObject "Item" $ \o -> do
-    Item <$> (cleanTitle <$> o .: "title") <*> (cleanDate =<< o .: "dueDate")
 
 -- | Actually, we deserialize the Item query as Value to keep the complete
 -- output payload on disk, if we would like to edit the display and use more
@@ -152,3 +139,19 @@ getLoan Auth {..} = do
           <> cookieJar cookies
       )
   pure $ (responseBody response :: Response Items).response.items
+
+data User = User
+  { user :: Text,
+    password :: Text,
+    name :: String
+  }
+  deriving (FromJSON, Generic, Show)
+
+-- Refresh everything
+refresh :: [User] -> IO [(String, [Value])]
+refresh users = do
+  forConcurrently users $ \User {..} -> do
+    auth <- login (Credential {..})
+    items <- getLoan auth
+    -- TODO: handle error here
+    pure (name, items)

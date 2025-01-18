@@ -1,30 +1,32 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# OPTIONS -Wall #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
-{-# OPTIONS -Wall #-}
-
+import Api
 import Control.Monad (forM_)
 import Data.Aeson
 import Data.Text (Text)
-import Data.Text qualified as Text
-import Data.Text.IO qualified as Text
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
 import Data.Time
 import GHC.Generics (Generic)
 import PyF
+import System.Directory
+import System.Environment (getArgs)
 
-data Payload = Payload {response :: Response}
-  deriving (Show, FromJSON, Generic)
-
-data Response = Response {items :: [Item]}
-  deriving (Show, FromJSON, Generic)
-
-data Item = Item {title :: Text, dueDate :: Day}
-  deriving (Show, Generic)
+-- | A book loan
+data Item = Item
+  { title :: Text,
+    dueDate :: Day
+  }
+  deriving (Show, ToJSON, Generic)
 
 instance FromJSON Item where
   parseJSON = withObject "Item" $ \o -> do
@@ -55,6 +57,16 @@ formatItem today maxTitleLength item = [fmt| • {item.title: {maxTitleLength}} 
 
 main :: IO ()
 main = do
+  -- Check if we need to refresh
+  args <- getArgs
+  case args of
+    ["--refresh"] -> do
+      refreshIguanaFile
+    _ -> pure ()
+
+  mtime <- getModificationTime ".iguana.json"
+  print mtime
+
   Just peoples <- decodeFileStrict @[(Text, [Item])] ".iguana.json"
 
   today <- (.utctDay) <$> getCurrentTime
@@ -90,3 +102,9 @@ progressBar important a b = color (replicate a fullBlock) <> green (replicate (b
     color
       | important = red
       | otherwise = yellow
+
+refreshIguanaFile :: IO ()
+refreshIguanaFile = do
+  Just users <- decodeFileStrict @[User] "credentials.json"
+  items <- refresh users
+  encodeFile ".iguana.json" items

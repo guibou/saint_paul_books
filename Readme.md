@@ -30,14 +30,17 @@ Fill the `credentials.json` file as such:
 ]
 ```
 
-Then (in the `nix develop` shell), run:
+Then run the executable (with `--refresh`). You can do that with nix:
 
-```sh
-# (Optional) refresh book listing
-runhaskell ./Refresh.hs
-
-runhaskell ./Summerize.hs
 ```
+# With nix, takes care of everything
+nix run .# -- --refresh`
+
+# with cabal
+cabal run -- --refresh
+```
+
+The `--refresh` flag can be ignored on future run unless you want to refresh the listing.
 
 ![](assets/example.png)
 

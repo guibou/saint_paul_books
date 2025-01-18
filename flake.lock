@@ -2,20 +2,39 @@
   "nodes": {
     "nixpkgs": {
       "locked": {
-        "lastModified": 1736798957,
-        "narHash": "sha256-qwpCtZhSsSNQtK4xYGzMiyEDhkNzOCz/Vfu4oL2ETsQ=",
-        "path": "/nix/store/7hw19rbs6p20l2gxbf13la04pcs2znmz-source",
-        "rev": "9abb87b552b7f55ac8916b6fc9e5cb486656a2f3",
-        "type": "path"
+        "lastModified": 1737223978,
+        "narHash": "sha256-5r5py5/ckGE7EzQk0uwOyeDus4xowRPmFrAhSNrb51g=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "d37c24666dc05cdf1e9b76ea4437e3f222c7f944",
+        "type": "github"
       },
       "original": {
-        "id": "nixpkgs",
-        "type": "indirect"
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "reflex": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1732366171,
+        "narHash": "sha256-NvpYRNfVmS0uxkEAuS7t2iul4NGQjBVZxFoYCn08yu4=",
+        "owner": "reflex-frp",
+        "repo": "reflex-platform",
+        "rev": "2e0d31bc1b565eed02a3848cde0e0dbc4f33a2d4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "reflex-frp",
+        "repo": "reflex-platform",
+        "type": "github"
       }
     },
     "root": {
       "inputs": {
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "reflex": "reflex"
       }
     }
   },
