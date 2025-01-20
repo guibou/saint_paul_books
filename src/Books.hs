@@ -16,7 +16,7 @@ data Book = Book
   { title :: Text,
     dueDate :: Day
   }
-  deriving (Show, Generic)
+  deriving (Show, Generic, Eq)
 
 instance FromJSON Book where
   parseJSON = withObject "Book" $ \o -> do

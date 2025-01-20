@@ -22,8 +22,8 @@ import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson
 import Data.Aeson.Encode.Pretty (encodePretty)
-import Data.Foldable (for_)
-import Data.Functor ((<&>))
+import Data.Functor (($>), (<&>))
+import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -94,6 +94,9 @@ refreshAction users = do
     Left (err :: SomeException) -> do
       pure $ Left (show err)
 
+data RefreshStatus = Refreshing | Idle
+  deriving (Show)
+
 main :: IO ()
 main = do
   mtime <- getCurrentTime
@@ -106,6 +109,16 @@ main = do
       settingsDyn <- foldDyn (\f x -> f x) initSetting updateSettings
 
       credentialsUniqDyn <- holdUniqDyn ((credentials) <$> (settingsDyn))
+
+      refreshStatus <-
+        foldDyn (\new _old -> new) Idle $
+          leftmost
+            [ refreshEventWithNewItems
+                $> Idle,
+              refreshEvent
+                $> Refreshing
+            ]
+
       let refreshEvent =
             leftmost
               [ updated credentialsUniqDyn,
@@ -134,8 +147,8 @@ main = do
       let updateDebug = updated (snd <$> totoDyn)
 
       -- Header widget
-      refreshButton <- el "div" $ do
-        dyn_ $ flip fmap peoplesDyn $ \(mtime, peoples) -> do
+      refreshButtonEE <- el "div" $ do
+        dyn $ flip fmap peoplesDyn $ \(mtime, peoples) -> do
           now <- liftIO $ getCurrentTime
           let iguanaAge = now `diffUTCTime` mtime
 
@@ -153,37 +166,53 @@ main = do
                   ]
             )
             $ text ""
-          text $ niceAge iguanaAge
-        button "⟳"
+          dyn $
+            refreshStatus <&> \status -> do
+              case status of
+                Refreshing -> do
+                  el "progress" $ text ""
+                  pure never
+                Idle -> do
+                  evt <- button "⟳"
+                  text $ niceAge iguanaAge
+                  pure evt
+      refreshButtonE <- switchHold never refreshButtonEE
+      refreshButton <- switchHold never refreshButtonE
 
       -- Listing widget
-      dyn_ $ flip fmap peoplesDyn $ \(_, peoples) -> do
+      void $ listWithKey (fmap (Map.fromList . snd) peoplesDyn) $ \name booksDyn -> do
         now <- liftIO $ getCurrentTime
         let today = utctDay now
 
-        for_ peoples $ \(name, books) -> do
-          el "details" $ do
-            el "summary" $ text $ name <> " " <> tshow (length books) <> " / " <> tshow CapacityPerUser
-            el "table" $ do
-              for_ books $ \book -> do
-                el "tr" $ do
-                  let remainingDays = diffDays (dueDate book) today
-                  let elapsedDays = LoanMaxDays - fromIntegral remainingDays
-                  el "td" $ text $ title book
-                  el "td" $ text $ tshow remainingDays <> " days"
-                  el "td"
-                    $ elDynAttr
-                      "meter"
-                      ( settingsDyn
-                          <&> \Settings {..} ->
-                            [ ("min", "0"),
-                              ("max", tshow LoanMaxDays),
-                              ("low", tshow loanDayThreshold),
-                              ("value", tshow remainingDays)
-                            ]
-                      )
-                    $ text
-                    $ tshow elapsedDays <> " / " <> tshow LoanMaxDays
+        el "details" $ do
+          el "summary" $ do
+            text $ name <> " "
+            display (length <$> booksDyn)
+            text $ " / " <> tshow CapacityPerUser
+          el "table" $ do
+            -- TODO: the complete block is rebuilt if anything changes, but
+            -- that's fine. Maybe later we could introduce finer grained updates
+            simpleList booksDyn $ \bookDyn ->
+              dyn $
+                bookDyn <&> \book ->
+                  el "tr" $ do
+                    let remainingDays = diffDays (dueDate book) today
+                    let elapsedDays = LoanMaxDays - fromIntegral remainingDays
+                    el "td" $ text $ title book
+                    el "td" $ text $ tshow remainingDays <> " days"
+                    el "td"
+                      $ elDynAttr
+                        "meter"
+                        ( settingsDyn
+                            <&> \Settings {..} ->
+                              [ ("min", "0"),
+                                ("max", tshow LoanMaxDays),
+                                ("low", tshow loanDayThreshold),
+                                ("value", tshow remainingDays)
+                              ]
+                        )
+                      $ text
+                      $ tshow elapsedDays <> " / " <> tshow LoanMaxDays
 
       -- Settings
       --
