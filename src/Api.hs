@@ -2,14 +2,11 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
-{-# OPTIONS_GHC -Wno-partial-type-signatures #-}
 
 {-
  - Api for iguana library
@@ -17,17 +14,15 @@
 module Api where
 
 import Control.Concurrent.Async (forConcurrently)
-import Control.Lens (ix, (^..))
-import Control.Lens.Regex.ByteString
 import Data.Aeson
+import qualified Data.ByteString.Char8 as BS
 import Data.Text
 import Data.Text.Encoding (decodeUtf8)
 import GHC.Generics
+import Network.Connection (TLSSettings (..))
 import Network.HTTP.Client (CookieJar)
+import Network.HTTP.Client.TLS (mkManagerSettings, newTlsManagerWith)
 import Network.HTTP.Req
-
-sessionIdRegex :: _
-sessionIdRegex = [regex|Vfocus.Settings.sessionID = '(.*)';|]
 
 -- | Represents the root of the iguana library
 --
@@ -43,7 +38,7 @@ data Credential = Credential
   }
 
 -- A response in the iguana api, contains a payload
-data Response t = Payload {response :: t}
+data Response t = Response {response :: t}
   deriving (Show, FromJSON, Generic)
 
 -- | Response from login
@@ -69,12 +64,27 @@ data Items = Items
   }
   deriving (Show, FromJSON, Generic)
 
+extractSessionId :: _ -> Text
+extractSessionId t = do
+  let (_, rest) = BS.breakSubstring sessionIdPrefix t
+  decodeUtf8 $ BS.takeWhile (/= '\'') $ BS.drop 1 $ BS.dropWhile (/= '\'') rest
+  where
+    sessionIdPrefix = "Vfocus.Settings.sessionID = '"
+
 -- | Log to the library. Returns an 'Auth' which is valid for a few time (not
 -- clear how much).
 login :: Credential -> IO Auth
-login credential = do
+login Credential {..} = do
+  --
+  -- See
+  -- https://groups.google.com/g/yesodweb/c/7Lwzl2fvsZY/m/NjVpqGk1KlIJ?pli=1
+  -- for a discussion about not certified CA
+  manager <- newTlsManagerWith (mkManagerSettings (TLSSettingsSimple True False False) Nothing)
+  let httpConfig = defaultHttpConfig {httpConfigAltManager = Just manager}
+
   -- Step 1: get the first session id and associated cookie jar
-  response <- runReq defaultHttpConfig $ do
+  --
+  response <- runReq httpConfig $ do
     req
       POST
       (iguana_root /: "www.main.cls")
@@ -83,10 +93,10 @@ login credential = do
       mempty
 
   let cookies = responseCookieJar response
-  let [decodeUtf8 -> sessionId] = (responseBody response) ^.. sessionIdRegex . groups . ix 0
+  let sessionId = extractSessionId (responseBody response)
 
   -- Step 2: login
-  response <- runReq defaultHttpConfig $ do
+  response <- runReq httpConfig $ do
     req
       POST
       (iguana_root /: "Rest.Server.cls")
@@ -99,8 +109,8 @@ login credential = do
                   [ "language" .= ("fre" :: Text),
                     "serviceProfile" .= ("Iguana" :: Text),
                     "locationProfile" .= ("" :: Text),
-                    "user" .= credential.user,
-                    "password" .= credential.password,
+                    "user" .= user,
+                    "password" .= password,
                     "institution" .= ("" :: Text)
                   ]
             ]
@@ -110,13 +120,16 @@ login credential = do
           <> "method" =: ("user/credentials" :: Text)
           <> cookieJar cookies
       )
-  let session = (responseBody response :: Response Session).response
+  let Response session = responseBody response :: Response Session
   pure $ Auth {..}
 
 -- | Returns all the book owned by an authenticated user
 getLoan :: Auth -> IO [Value]
 getLoan Auth {..} = do
-  response <- runReq defaultHttpConfig $ do
+  manager <- newTlsManagerWith (mkManagerSettings (TLSSettingsSimple True False False) Nothing)
+  let httpConfig = defaultHttpConfig {httpConfigAltManager = Just manager}
+
+  response <- runReq httpConfig $ do
     req
       POST
       (iguana_root /: "Rest.Server.cls")
@@ -124,7 +137,7 @@ getLoan Auth {..} = do
           object
             [ "request"
                 .= object
-                  [ "sessionId" .= session.sessionId,
+                  [ "sessionId" .= let Session {..} = session in sessionId,
                     -- Note: most of these keys appears in the query I reverse
                     -- engineered. I'm too lazy to try to remove some of them.
                     "LocationProfile" .= ("" :: Text),
@@ -138,14 +151,14 @@ getLoan Auth {..} = do
           <> "method" =: ("user/loans" :: Text)
           <> cookieJar cookies
       )
-  pure $ (responseBody response :: Response Items).response.items
+  pure $ (let (Response (Items items)) = responseBody response :: Response Items in items)
 
 data User = User
   { user :: Text,
     password :: Text,
     name :: String
   }
-  deriving (FromJSON, Generic, Show)
+  deriving (FromJSON, ToJSON, Generic, Show, Eq)
 
 -- Refresh everything
 refresh :: [User] -> IO [(String, [Value])]

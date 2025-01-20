@@ -4,46 +4,27 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
-{-# OPTIONS -Wall #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
 import Api
+import Books
 import Control.Monad (forM_)
 import Data.Aeson
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Data.Time
-import GHC.Generics (Generic)
 import PyF
-import System.Directory
 import System.Environment (getArgs)
-
--- | A book loan
-data Item = Item
-  { title :: Text,
-    dueDate :: Day
-  }
-  deriving (Show, ToJSON, Generic)
-
-instance FromJSON Item where
-  parseJSON = withObject "Item" $ \o -> do
-    Item <$> (cleanTitle <$> o .: "title") <*> (cleanDate =<< o .: "dueDate")
-
-cleanDate :: (MonadFail m) => String -> m Day
-cleanDate = parseTimeM False defaultTimeLocale "%Y%m%d"
-
-cleanTitle :: Text -> Text
-cleanTitle = Text.strip . Text.takeWhile (/= '[')
 
 red, yellow, green :: String -> String
 red t = "\ESC[31;1;4m" <> t <> "\ESC[0m"
 yellow t = "\ESC[33;1;4m" <> t <> "\ESC[0m"
 green t = "\ESC[32;1;4m" <> t <> "\ESC[0m"
 
-formatItem :: Day -> Int -> Item -> Text
+formatItem :: Day -> Int -> Book -> Text
 formatItem today maxTitleLength item = [fmt| • {item.title: {maxTitleLength}} {bar} ({coloredDays} days)|]
   where
     daysLeft = diffDays item.dueDate today
@@ -64,10 +45,7 @@ main = do
       refreshIguanaFile
     _ -> pure ()
 
-  mtime <- getModificationTime ".iguana.json"
-  print mtime
-
-  Just peoples <- decodeFileStrict @[(Text, [Item])] ".iguana.json"
+  Just peoples <- decodeFileStrict @[(Text, [Book])] ".iguana.json"
 
   today <- (.utctDay) <$> getCurrentTime
 

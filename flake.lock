@@ -15,7 +15,7 @@
         "type": "github"
       }
     },
-    "reflex": {
+    "reflex-platform": {
       "flake": false,
       "locked": {
         "lastModified": 1732366171,
@@ -34,7 +34,7 @@
     "root": {
       "inputs": {
         "nixpkgs": "nixpkgs",
-        "reflex": "reflex"
+        "reflex-platform": "reflex-platform"
       }
     }
   },

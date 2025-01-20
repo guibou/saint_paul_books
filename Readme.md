@@ -44,8 +44,17 @@ The `--refresh` flag can be ignored on future run unless you want to refresh the
 
 ![](assets/example.png)
 
+# Android UI
+
+- Build the UI with: `nix build --impure .\#ui.android.st-paul-books`
+- Deploy with `./result/bin/deploy` (if phone connect with `adb`) or just download the APK on the phone.
+
+
+![](assets/android-ui.png)
+
+You will need to enter the `credential.json` file content into the `Settings` panel.
+
 # Future development
 
 - Automatic time extension for book close to the delay
-- Advanced UI (possibly for phone)
 - Split auth and query, so we can reuse already authenticated users.
