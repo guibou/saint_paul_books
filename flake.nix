@@ -11,26 +11,32 @@
     };
   };
 
-  outputs = { self, nixpkgs, reflex-platform, ... }:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      reflex-platform,
+      ...
+    }:
     let
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
 
       reflex = import reflex-platform {
-        config .android_sdk.accept_license = true;
+        config.android_sdk.accept_license = true;
         config.allowBroken = true;
 
         haskellOverlays = [
           (
             selfPkgs: superPkgs:
-              let
-                pkgs = superPkgs.callPackage ({ pkgs }: pkgs) { };
-              in
-              {
-                # Takes hours to check
-                RSA = pkgs.haskell.lib.dontCheck superPkgs.RSA;
-                # Force static build so android does not fails at link time
-                zlib = pkgs.haskell.lib.enableCabalFlag superPkgs.zlib "bundled-c-zlib";
-              }
+            let
+              pkgs = superPkgs.callPackage ({ pkgs }: pkgs) { };
+            in
+            {
+              # Takes hours to check
+              RSA = pkgs.haskell.lib.dontCheck superPkgs.RSA;
+              # Force static build so android does not fails at link time
+              zlib = pkgs.haskell.lib.enableCabalFlag superPkgs.zlib "bundled-c-zlib";
+            }
           )
         ];
       };
@@ -50,31 +56,37 @@
       packages.x86_64-linux = {
         default = pkgs.haskellPackages.callCabal2nix "st-paul-book" ./. { };
 
-        ui = reflex.project ({ pkgs, ... }: {
-          useWarp = false;
-          packages = {
-            st-paul-books = ./.;
-          };
+        ui = reflex.project (
+          { pkgs, ... }:
+          {
+            useWarp = false;
+            packages = {
+              st-paul-books = ./.;
+            };
 
-          shells = {
-            ghc = [ "st-paul-books" ];
-          };
+            shells = {
+              ghc = [ "st-paul-books" ];
+            };
 
-          android.st-paul-books = {
-            executableName = "st-paul-books";
-            applicationId = "org.guibou.StPaulBooks";
-            displayName = "Saint Paul Books";
+            android.st-paul-books = {
+              executableName = "st-paul-books";
+              applicationId = "org.guibou.StPaulBooks";
+              displayName = "Saint Paul Books";
 
-            permissions = ''
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-            '';
-          };
-        });
+              permissions = ''
+                <uses-permission android:name="android.permission.INTERNET" />
+                <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              '';
+            };
+          }
+        );
       };
       devShells.x86_64-linux = {
         default = self.packages.x86_64-linux.default.env.overrideAttrs (old: {
-          nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.cabal-install pkgs.haskellPackages.haskell-language-server ];
+          nativeBuildInputs = old.nativeBuildInputs ++ [
+            pkgs.cabal-install
+            pkgs.haskellPackages.haskell-language-server
+          ];
         });
       };
     };

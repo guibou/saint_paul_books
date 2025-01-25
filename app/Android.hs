@@ -19,16 +19,19 @@ import Books
 import Control.Concurrent.Async (async)
 import Control.Exception
 import Control.Monad (join, void)
+import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Functor (($>), (<&>))
 import qualified Data.Map.Strict as Map
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Text.Encoding (encodeUtf8)
 import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Encoding (decodeUtf8)
+import Data.Text.Read (decimal)
 import Data.Time
 import GHC.Generics
 import Reflex.Dom
@@ -49,8 +52,10 @@ pattern DefaultLowRemainingDays = 5
 tshow :: (Show t) => t -> Text
 tshow = Text.pack . show
 
-tread :: (Read t) => Text -> t
-tread = read . Text.unpack
+tread :: Text -> Maybe Int
+tread t = case decimal t of
+  Right (i, "") -> Just i
+  _ -> Nothing
 
 data Settings = Settings
   { capacityThreshold :: Int,
@@ -243,7 +248,7 @@ refreshBooksCallback credential callback = do
     callback resM
   pure ()
 
-settingsPanel :: (DomBuilder t m, MonadSample t m, PostBuild t m) => Dynamic t Settings -> m (Event t (Settings -> Settings))
+settingsPanel :: (DomBuilder t m, MonadSample t m, PostBuild t m, MonadFix m, MonadHold t m) => Dynamic t Settings -> m (Event t (Settings -> Settings))
 settingsPanel settingsDyn = do
   el "table" $ do
     Settings {..} <- sample $ current settingsDyn
@@ -287,8 +292,8 @@ settingsPanel settingsDyn = do
           )
         ]
 
-inputNumber :: (DomBuilder t m) => Int -> m (Dynamic t Int)
-inputNumber defaultValue = do
+inputNumber :: (DomBuilder t m, MonadHold t m, MonadFix m) => Int -> m (Dynamic t Int)
+inputNumber defaultValue = mdo
   elem <-
     inputElement
       ( def
@@ -297,5 +302,17 @@ inputNumber defaultValue = do
           & inputElementConfig_elementConfig
           . elementConfig_initialAttributes
           .~ [("type", "number")]
+          & inputElementConfig_elementConfig
+          . elementConfig_modifyAttributes
+          .~ (e <&> \v -> [("type", Just "number"), ("style", if v then Nothing else Just "border-color: red")])
       )
-  pure $ fmap tread (value elem)
+
+  let e = (updated $ value elem) <&> \v -> isJust (tread v)
+
+  foldDyn
+    ( \t old -> case tread t of
+        Nothing -> old
+        Just new -> new
+    )
+    defaultValue
+    (updated $ value elem)
