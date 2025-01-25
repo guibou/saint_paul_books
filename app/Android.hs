@@ -120,6 +120,7 @@ main = do
 
               let total = sum $ map (\(_mtime, items) -> length @[] items) books
                   capacity = length books * CapacityPerUser
+
               text $ tshow total <> "/" <> tshow capacity
               elDynAttr
                 "meter"
@@ -181,8 +182,25 @@ main = do
                   Refreshing -> do
                     el "progress" $ text ""
                   Idle -> do
-                    display (length . snd <$> booksDyn)
-                    text $ " / " <> tshow CapacityPerUser
+                    dyn_ $
+                      booksDyn <&> \(_, books) -> do
+                        text $ tshow $ length books
+                        text $ " / " <> tshow CapacityPerUser
+                        text " "
+                        let minRemainingDays = case books of
+                              [] -> LoanMaxDays
+                              _ -> minimum $ map (\book -> fromIntegral $ diffDays (dueDate book) today) books
+                        elDynAttr
+                          "meter"
+                          ( settingsDyn
+                              <&> \Settings {..} ->
+                                [ ("min", "0"),
+                                  ("max", tshow LoanMaxDays),
+                                  ("low", tshow loanDayThreshold),
+                                  ("value", tshow minRemainingDays)
+                                ]
+                          )
+                          $ text ""
                   RefreshError t -> text t
           el "table" $ do
             -- TODO: the complete block is rebuilt if anything changes, but
