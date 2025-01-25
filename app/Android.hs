@@ -16,15 +16,14 @@ module Main where
 
 import Api
 import Books
-import Control.Concurrent.Async (async, forConcurrently)
+import Control.Concurrent.Async (async)
 import Control.Exception
-import Control.Monad (void)
+import Control.Monad (join, void)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Functor (($>), (<&>))
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Text.Encoding (encodeUtf8)
@@ -75,124 +74,120 @@ niceAge (truncate -> age)
   | age < (3600 * 24) = tshow (age `div` 3600) <> " hours ago"
   | otherwise = tshow (age `div` (3600 * 24)) <> " days ago"
 
-refreshAction :: [User] -> IO (Either String (UTCTime, [(Text, [Book])]))
-refreshAction users = do
-  resM <- try $ forConcurrently users $ \User {..} -> do
-    auth <- login (Credential {..})
+refreshBooks :: User -> IO (Either Text (UTCTime, [Book]))
+refreshBooks User {..} = do
+  resM <- try $ do
+    auth <- getLogin credential
     items <- getLoan auth
     -- TODO: handle error here
-    pure (name, items)
+    pure items
 
   -- Write the payload to the disk
   -- encodeFile ".iguana.json" res
 
   case resM of
     Right res -> do
-      let (fromMaybe [] -> peoples) = decode @[(Text, [Book])] (encode res)
-      mtime <- getCurrentTime
-      pure $ Right (mtime, peoples)
+      case eitherDecode @[Book] (encode res) of
+        Right books -> do
+          mtime <- getCurrentTime
+          pure $ Right (mtime, books)
+        Left err -> pure (Left $ Text.pack err)
     Left (err :: SomeException) -> do
-      pure $ Left (show err)
+      pure $ Left (tshow err)
 
-data RefreshStatus = Refreshing | Idle
+data RefreshStatus = Refreshing | Idle | RefreshError Text
   deriving (Show)
 
 main :: IO ()
 main = do
-  mtime <- getCurrentTime
-
   mainWidget $
     mdo
       webStorageSettings <- webStorageDyn "settings" defaultSettings (updated settingsDyn)
       initSetting <- sample $ current webStorageSettings
+      credentialsUniqDyn <- holdUniqDyn ((credentials) <$> (settingsDyn))
 
       settingsDyn <- foldDyn (\f x -> f x) initSetting updateSettings
 
-      credentialsUniqDyn <- holdUniqDyn ((credentials) <$> (settingsDyn))
-
-      refreshStatus <-
-        foldDyn (\new _old -> new) Idle $
-          leftmost
-            [ refreshEventWithNewItems
-                $> Idle,
-              refreshEvent
-                $> Refreshing
-            ]
-
-      let refreshEvent =
-            leftmost
-              [ updated credentialsUniqDyn,
-                tag (current credentialsUniqDyn) refreshButton
-              ]
-
-      refreshEventWithNewItems <-
-        performEventAsync
-          ( fmap eventCallback refreshEvent
-          )
-
-      webStoragePeoples <- webStorageDyn "peoples" (mtime, []) (updated peoplesDyn)
-      initPeoples <- sample $ current webStoragePeoples
-
-      totoDyn <-
-        foldDyn
-          ( \x'M (current, _errorMsg) -> do
-              case x'M of
-                Left errMsg -> do
-                  (current, Text.pack errMsg)
-                Right x' -> (x', "")
-          )
-          (initPeoples, "")
-          refreshEventWithNewItems
-      let peoplesDyn = fst <$> totoDyn
-      let updateDebug = updated (snd <$> totoDyn)
-
       -- Header widget
-      refreshButtonEE <- el "div" $ do
-        dyn $ flip fmap peoplesDyn $ \(mtime, peoples) -> do
-          now <- liftIO $ getCurrentTime
-          let iguanaAge = now `diffUTCTime` mtime
+      refreshButtonE <- el "div" $ do
+        dyn $ flip fmap allBooks $ \books -> do
+          case books of
+            [] -> text "No user, add them in the Setting panel"
+            _ -> do
+              let oldest_update = minimum (map fst books)
+              now <- liftIO $ getCurrentTime
+              let iguanaAge = now `diffUTCTime` oldest_update
 
-          let total = sum $ map (\(_name, items) -> length items) peoples
-              capacity = length peoples * CapacityPerUser
-          text $ tshow total <> "/" <> tshow capacity
-          elDynAttr
-            "meter"
-            ( settingsDyn
-                <&> \Settings {..} ->
-                  [ ("min", "0"),
-                    ("max", tshow capacity),
-                    ("high", tshow $ capacity - capacityThreshold),
-                    ("value", tshow total)
-                  ]
-            )
-            $ text ""
-          dyn $
-            refreshStatus <&> \status -> do
-              case status of
-                Refreshing -> do
-                  el "progress" $ text ""
-                  pure never
-                Idle -> do
-                  evt <- button "⟳"
-                  text $ niceAge iguanaAge
-                  pure evt
-      refreshButtonE <- switchHold never refreshButtonEE
+              let total = sum $ map (\(_mtime, items) -> length @[] items) books
+                  capacity = length books * CapacityPerUser
+              text $ tshow total <> "/" <> tshow capacity
+              elDynAttr
+                "meter"
+                ( settingsDyn
+                    <&> \Settings {..} ->
+                      [ ("min", "0"),
+                        ("max", tshow capacity),
+                        ("high", tshow $ capacity - capacityThreshold),
+                        ("value", tshow total)
+                      ]
+                )
+                $ text
+                  ""
+              text $
+                niceAge iguanaAge
+          button "⟳"
+
       refreshButton <- switchHold never refreshButtonE
 
+      now <- liftIO $ getCurrentTime
+      let today = utctDay now
+
       -- Listing widget
-      void $ listWithKey (fmap (Map.fromList . snd) peoplesDyn) $ \name booksDyn -> do
-        now <- liftIO $ getCurrentTime
-        let today = utctDay now
+      let allBooks = join $ fmap distributeListOverDyn $ Map.elems <$> allBooks'
+      allBooks' <- listWithKey (fmap (Map.fromList . map (\u -> (login (credential u), u))) credentialsUniqDyn) $ \login userDyn -> mdo
+        webStorageBooks <- webStorageDyn ("book" <> login) (now, []) (updated booksDyn)
+        initBooks <- sample $ current webStorageBooks
+        booksDyn <- foldDyn (\new _old -> new) initBooks updateBooks
+
+        let refreshEvent =
+              leftmost
+                [ updated userDyn,
+                  tag (current userDyn) refreshButton
+                ]
+        (fanEither -> (updateError, updateBooks)) <-
+          performEventAsync $
+            refreshBooksCallback
+              <$> refreshEvent
+
+        refreshStatus <-
+          foldDyn (\new _old -> new) Idle $
+            leftmost
+              [ updateBooks
+                  $> Idle,
+                RefreshError
+                  <$> updateError,
+                refreshEvent
+                  $> Refreshing
+              ]
 
         el "details" $ do
           el "summary" $ do
-            text $ name <> " "
-            display (length <$> booksDyn)
-            text $ " / " <> tshow CapacityPerUser
+            dynText (displayName <$> userDyn)
+            text " "
+
+            dyn_ $
+              refreshStatus <&> \status -> do
+                case status of
+                  Refreshing -> do
+                    el "progress" $ text ""
+                  Idle -> do
+                    display (length . snd <$> booksDyn)
+                    text $ " / " <> tshow CapacityPerUser
+                  RefreshError t -> text t
           el "table" $ do
             -- TODO: the complete block is rebuilt if anything changes, but
             -- that's fine. Maybe later we could introduce finer grained updates
-            simpleList booksDyn $ \bookDyn ->
+            void $ simpleList (snd <$> booksDyn) $ \bookDyn ->
               dyn $
                 bookDyn <&> \book ->
                   el "tr" $ do
@@ -213,31 +208,20 @@ main = do
                         )
                       $ text
                       $ tshow elapsedDays <> " / " <> tshow LoanMaxDays
+            pure $ booksDyn
 
       -- Settings
       --
       updateSettings <- el "details" $ do
         el "summary" $ text "Settings"
         updateSettings <- settingsPanel settingsDyn
-        _ <- el "details" $ do
-          -- debug
-          el "summary" $ text "debug"
-          do
-            textAreaElement
-              ( def
-                  & textAreaElementConfig_initialValue
-                  .~ "Everything is fine"
-                  & ( textAreaElementConfig_setValue
-                        .~ updateDebug
-                    )
-              )
         pure updateSettings
       pure ()
 
-eventCallback :: (MonadIO m) => [User] -> (Either String (UTCTime, [(Text, [Book])]) -> IO ()) -> m ()
-eventCallback credentials callback = do
+refreshBooksCallback :: (MonadIO m) => User -> (Either Text (UTCTime, [Book]) -> IO ()) -> m ()
+refreshBooksCallback credential callback = do
   void $ liftIO $ async $ do
-    resM <- refreshAction credentials
+    resM <- refreshBooks credential
     callback resM
   pure ()
 

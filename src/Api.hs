@@ -33,9 +33,10 @@ iguana_root = https "mediatheques-saintpaul.re" /: "iguana"
 
 -- | represents credentials for login
 data Credential = Credential
-  { user :: Text,
+  { login :: Text,
     password :: Text
   }
+  deriving (FromJSON, ToJSON, Generic, Show, Eq)
 
 -- A response in the iguana api, contains a payload
 data Response t = Response {response :: t}
@@ -73,8 +74,8 @@ extractSessionId t = do
 
 -- | Log to the library. Returns an 'Auth' which is valid for a few time (not
 -- clear how much).
-login :: Credential -> IO Auth
-login Credential {..} = do
+getLogin :: Credential -> IO Auth
+getLogin Credential {..} = do
   --
   -- See
   -- https://groups.google.com/g/yesodweb/c/7Lwzl2fvsZY/m/NjVpqGk1KlIJ?pli=1
@@ -109,7 +110,7 @@ login Credential {..} = do
                   [ "language" .= ("fre" :: Text),
                     "serviceProfile" .= ("Iguana" :: Text),
                     "locationProfile" .= ("" :: Text),
-                    "user" .= user,
+                    "user" .= login,
                     "password" .= password,
                     "institution" .= ("" :: Text)
                   ]
@@ -154,17 +155,16 @@ getLoan Auth {..} = do
   pure $ (let (Response (Items items)) = responseBody response :: Response Items in items)
 
 data User = User
-  { user :: Text,
-    password :: Text,
-    name :: String
+  { credential :: Credential,
+    displayName :: Text
   }
   deriving (FromJSON, ToJSON, Generic, Show, Eq)
 
 -- Refresh everything
-refresh :: [User] -> IO [(String, [Value])]
+refresh :: [User] -> IO [(Text, [Value])]
 refresh users = do
   forConcurrently users $ \User {..} -> do
-    auth <- login (Credential {..})
+    auth <- getLogin credential
     items <- getLoan auth
     -- TODO: handle error here
-    pure (name, items)
+    pure (displayName, items)
