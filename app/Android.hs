@@ -213,28 +213,7 @@ main = do
             void $ simpleList (snd <$> booksDyn) $ \bookDyn ->
               dyn $
                 bookDyn <&> \book ->
-                  el "tr" $ do
-                    let remainingDays = diffDays (dueDate book) today
-                    let elapsedDays = LoanMaxDays - fromIntegral remainingDays
-                    el "td" $ mdo
-                      (e, _) <- elDynAttr' "div" (set <&> \b -> if b then Map.singleton "style" "text-decoration-line: line-through" else []) $ text $ title book
-                      let click = domEvent Click e
-                      set <- foldDyn (\_ v -> not v) False click
-                      pure ()
-                    el "td" $ text $ tshow remainingDays <> " days"
-                    el "td"
-                      $ elDynAttr
-                        "meter"
-                        ( settingsDyn
-                            <&> \Settings {..} ->
-                              [ ("min", "0"),
-                                ("max", tshow LoanMaxDays),
-                                ("low", tshow loanDayThreshold),
-                                ("value", tshow remainingDays)
-                              ]
-                        )
-                      $ text
-                      $ tshow elapsedDays <> " / " <> tshow LoanMaxDays
+                  displayBook book today settingsDyn
             pure $ booksDyn
 
       -- Settings
@@ -244,6 +223,31 @@ main = do
         updateSettings <- settingsPanel settingsDyn
         pure updateSettings
       pure ()
+
+displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m) => Book -> Day -> Dynamic t Settings -> m ()
+displayBook book today settingsDyn = do
+  el "tr" $ do
+    let remainingDays = diffDays (dueDate book) today
+    let elapsedDays = LoanMaxDays - fromIntegral remainingDays
+    el "td" $ mdo
+      (e, _) <- elDynAttr' "div" (set <&> \b -> if b then Map.singleton "style" "text-decoration-line: line-through" else []) $ text $ title book
+      let click = domEvent Click e
+      set <- foldDyn (\_ v -> not v) False click
+      pure ()
+    el "td" $ text $ tshow remainingDays <> " days"
+    el "td"
+      $ elDynAttr
+        "meter"
+        ( settingsDyn
+            <&> \Settings {..} ->
+              [ ("min", "0"),
+                ("max", tshow LoanMaxDays),
+                ("low", tshow loanDayThreshold),
+                ("value", tshow remainingDays)
+              ]
+        )
+      $ text
+      $ tshow elapsedDays <> " / " <> tshow LoanMaxDays
 
 refreshBooksCallback :: (MonadIO m) => User -> (Either Text (UTCTime, [Book]) -> IO ()) -> m ()
 refreshBooksCallback credential callback = do
