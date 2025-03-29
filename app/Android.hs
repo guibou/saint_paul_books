@@ -216,7 +216,11 @@ main = do
                   el "tr" $ do
                     let remainingDays = diffDays (dueDate book) today
                     let elapsedDays = LoanMaxDays - fromIntegral remainingDays
-                    el "td" $ text $ title book
+                    el "td" $ mdo
+                      (e, _) <- elDynAttr' "div" (set <&> \b -> if b then Map.singleton "style" "text-decoration-line: line-through" else []) $ text $ title book
+                      let click = domEvent Click e
+                      set <- foldDyn (\_ v -> not v) False click
+                      pure ()
                     el "td" $ text $ tshow remainingDays <> " days"
                     el "td"
                       $ elDynAttr
