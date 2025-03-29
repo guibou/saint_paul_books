@@ -23,7 +23,9 @@ import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson
 import Data.Aeson.Encode.Pretty (encodePretty)
+import Data.ByteString.Char8 (ByteString, pack)
 import Data.Functor (($>), (<&>))
+import Data.List (intercalate, sortOn)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isJust)
 import Data.Text (Text)
@@ -103,9 +105,19 @@ refreshBooks User {..} = do
 data RefreshStatus = Refreshing | Idle | RefreshError Text
   deriving (Show)
 
+css :: ByteString
+css =
+  pack $
+    intercalate
+      "\n"
+      []
+
+data Visibility = BooksVisibility | SettingsVisibility | CardsVisibility
+  deriving (Eq, Show)
+
 main :: IO ()
 main = do
-  mainWidget $
+  mainWidgetWithCss css $
     mdo
       webStorageSettings <- webStorageDyn "settings" defaultSettings (updated settingsDyn)
       initSetting <- sample $ current webStorageSettings
@@ -114,7 +126,7 @@ main = do
       settingsDyn <- foldDyn (\f x -> f x) initSetting updateSettings
 
       -- Header widget
-      refreshButtonE <- el "div" $ do
+      headerE <- el "div" $ do
         dyn $ flip fmap allBooks $ \books -> do
           case books of
             [] -> text "No user, add them in the Setting panel"
@@ -141,16 +153,39 @@ main = do
                   ""
               text $
                 niceAge iguanaAge
-          button "⟳"
+          booksE <- elAttr "a" ("href" =: "#books") $ button "🕮"
+          settingsE <- elAttr "a" ("href" =: "#settings") $ button "⚙"
+          cardsE <- elAttr "a" ("href" =: "#cards") $ button "🃟"
+          refreshE <- button "⟳"
+          pure
+            ( refreshE,
+              leftmost
+                [ BooksVisibility <$ booksE,
+                  SettingsVisibility <$ settingsE,
+                  CardsVisibility <$ cardsE
+                ]
+            )
 
-      refreshButton <- switchHold never refreshButtonE
+      refreshButtonE <- switchHold never (fst <$> headerE)
+      changeVisibilityE <- switchHold never (snd <$> headerE)
+      changeVisibility <- foldDyn const BooksVisibility changeVisibilityE
 
       now <- liftIO $ getCurrentTime
       let today = utctDay now
 
       -- Listing widget
       let allBooks = join $ fmap distributeListOverDyn $ Map.elems <$> allBooks'
-      allBooks' <- listWithKey (fmap (Map.fromList . map (\u -> (login (credential u), u))) credentialsUniqDyn) $ \login userDyn -> mdo
+      let allBooksInOneList = fmap (concat . fmap snd) allBooks
+
+      let visibleDiv = elDivVisible changeVisibility
+
+      visibleDiv BooksVisibility $ do
+        _ <- listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn dueDate) <$> allBooksInOneList) $ \_idx bookDyn -> do
+          dyn_ ((\book -> displayBook book today settingsDyn) <$> bookDyn)
+          pure ()
+        pure ()
+
+      allBooks' <- visibleDiv CardsVisibility $ listWithKey (fmap (Map.fromList . map (\u -> (login (credential u), u))) credentialsUniqDyn) $ \login userDyn -> mdo
         webStorageBooks <- webStorageDyn ("book" <> login) (now, []) (updated booksDyn)
         initBooks <- sample $ current webStorageBooks
         booksDyn <- foldDyn (\new _old -> new) initBooks updateBooks
@@ -158,7 +193,7 @@ main = do
         let refreshEvent =
               leftmost
                 [ updated userDyn,
-                  tag (current userDyn) refreshButton
+                  tag (current userDyn) refreshButtonE
                 ]
         (fanEither -> (updateError, updateBooks)) <-
           performEventAsync $
@@ -218,11 +253,19 @@ main = do
 
       -- Settings
       --
-      updateSettings <- el "details" $ do
-        el "summary" $ text "Settings"
+      updateSettings <- visibleDiv SettingsVisibility $ do
         updateSettings <- settingsPanel settingsDyn
         pure updateSettings
       pure ()
+
+elDivVisible :: (DomBuilder t m, PostBuild t m) => Dynamic t Visibility -> Visibility -> m a -> m a
+elDivVisible currentVisibleDyn name content = do
+  let toVisibility :: Visibility -> Map.Map Text Text
+      toVisibility current
+        | current == name = ("style" =: "display: block")
+        | otherwise = ("style" =: "display: none")
+
+  elDynAttr "div" (toVisibility <$> currentVisibleDyn) content
 
 displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m) => Book -> Day -> Dynamic t Settings -> m ()
 displayBook book today settingsDyn = do
