@@ -56,6 +56,9 @@
       packages.x86_64-linux = {
         default = pkgs.haskellPackages.callCabal2nix "st-paul-book" ./. { };
 
+        # Note: you need to use `nix build --impure path:.#ui.android.st-paul-books in
+        # order to bypass nix/git requirement that the `release-key.keystore`
+        # file is in the repo.
         ui = reflex.project (
           { pkgs, ... }:
           {
@@ -77,6 +80,15 @@
                 <uses-permission android:name="android.permission.INTERNET" />
                 <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               '';
+
+              # Generated using
+              # keytool -genkey -v -keystore release-key.keystore -alias alias -keyalg RSA -keysize 2048 -validity 10000
+              releaseKey = {
+                storeFile = ./release-key.keystore;
+                storePassword = "password";
+                keyAlias = "alias";
+                keyPassword = "password";
+              };
             };
           }
         );

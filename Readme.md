@@ -46,7 +46,8 @@ The `--refresh` flag can be ignored on future run unless you want to refresh the
 
 # Android UI
 
-- Build the UI with: `nix build --impure .\#ui.android.st-paul-books`
+- Create a `release-key.keystore` file (look in flake.nix for the receipt)
+- Build the UI with: `nix build --impure path:.\#ui.android.st-paul-books`
 - Deploy with `./result/bin/deploy` (if phone connect with `adb`) or just download the APK on the phone.
 
 
