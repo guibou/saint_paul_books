@@ -15,6 +15,7 @@ module Api where
 
 import Control.Concurrent.Async (forConcurrently)
 import Data.Aeson
+import Data.Aeson.Types
 import qualified Data.ByteString.Char8 as BS
 import Data.Text
 import Data.Text.Encoding (decodeUtf8)
@@ -51,8 +52,13 @@ data Session = Session
 
 -- | A complete authenticated session
 data Auth = Auth
-  { sessionId :: Text,
-    session :: Session,
+  { iguanaSession :: IguanaSession,
+    session :: Session
+  }
+  deriving (Show)
+
+data IguanaSession = IguanaSession
+  { iguanaSessionId :: Text,
     cookies :: CookieJar
   }
   deriving (Show)
@@ -82,6 +88,21 @@ newHttpConfig = do
   let httpConfig = defaultHttpConfig {httpConfigAltManager = Just manager}
   pure httpConfig
 
+iguanaRequest :: (FromJSON res) => HttpConfig -> IguanaSession -> Text -> [Pair] -> IO (JsonResponse res)
+iguanaRequest httpConfig IguanaSession {..} method payload = do
+  response <- runReq httpConfig $ do
+    req
+      POST
+      (iguana_root /: "Rest.Server.cls")
+      ( ReqBodyJson $ object ["request" .= object payload]
+      )
+      jsonResponse
+      ( "sessionId" =: iguanaSessionId
+          <> "method" =: method
+          <> cookieJar cookies
+      )
+  pure response
+
 -- | Log to the library. Returns an 'Auth' which is valid for a few time (not
 -- clear how much).
 getLogin :: Credential -> IO Auth
@@ -99,63 +120,38 @@ getLogin Credential {..} = do
       mempty
 
   let cookies = responseCookieJar response
-  let sessionId = extractSessionId (responseBody response)
+  let iguanaSessionId = extractSessionId (responseBody response)
+  let iguanaSession = IguanaSession {..}
 
   -- Step 2: login
-  response <- runReq httpConfig $ do
-    req
-      POST
-      (iguana_root /: "Rest.Server.cls")
-      ( ReqBodyJson $
-          object
-            [ "request"
-                .= object
-                  -- Note: most of these keys appears in the query I reverse
-                  -- engineered. I'm too lazy to try to remove some of them.
-                  [ "language" .= ("fre" :: Text),
-                    "serviceProfile" .= ("Iguana" :: Text),
-                    "locationProfile" .= ("" :: Text),
-                    "user" .= login,
-                    "password" .= password,
-                    "institution" .= ("" :: Text)
-                  ]
-            ]
-      )
-      jsonResponse
-      ( "sessionId" =: sessionId
-          <> "method" =: ("user/credentials" :: Text)
-          <> cookieJar cookies
-      )
+  response <-
+    iguanaRequest httpConfig iguanaSession "user/credentials" $
+      -- Note: most of these keys appears in the query I reverse
+      -- engineered. I'm too lazy to try to remove some of them.
+      [ "language" .= ("fre" :: Text),
+        "serviceProfile" .= ("Iguana" :: Text),
+        "locationProfile" .= ("" :: Text),
+        "user" .= login,
+        "password" .= password,
+        "institution" .= ("" :: Text)
+      ]
   let Response session = responseBody response :: Response Session
-  pure $ Auth {..}
+  pure $ Auth {iguanaSession = IguanaSession {..}, ..}
 
 -- | Returns all the book owned by an authenticated user
 getLoan :: Auth -> IO [Value]
 getLoan Auth {..} = do
   httpConfig <- newHttpConfig
 
-  response <- runReq httpConfig $ do
-    req
-      POST
-      (iguana_root /: "Rest.Server.cls")
-      ( ReqBodyJson $
-          object
-            [ "request"
-                .= object
-                  [ "sessionId" .= let Session {..} = session in sessionId,
-                    -- Note: most of these keys appears in the query I reverse
-                    -- engineered. I'm too lazy to try to remove some of them.
-                    "LocationProfile" .= ("" :: Text),
-                    "range" .= object ["from" .= (1 :: Int), "to" .= (10 :: Int)],
-                    "sort" .= object ["sortBy" .= ("!" :: Text), "sortDirection" .= ("ASC" :: Text)]
-                  ]
-            ]
-      )
-      jsonResponse
-      ( "sessionId" =: sessionId
-          <> "method" =: ("user/loans" :: Text)
-          <> cookieJar cookies
-      )
+  response <-
+    iguanaRequest httpConfig iguanaSession "user/loans" $
+      [ "sessionId" .= sessionId session,
+        -- Note: most of these keys appears in the query I reverse
+        -- engineered. I'm too lazy to try to remove some of them.
+        "LocationProfile" .= ("" :: Text),
+        "range" .= object ["from" .= (1 :: Int), "to" .= (10 :: Int)],
+        "sort" .= object ["sortBy" .= ("!" :: Text), "sortDirection" .= ("ASC" :: Text)]
+      ]
   pure $ (let (Response (Items items)) = responseBody response :: Response Items in items)
 
 data User = User
