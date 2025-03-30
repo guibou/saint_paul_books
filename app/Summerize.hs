@@ -12,6 +12,7 @@ import Api
 import Books
 import Control.Monad (forM_)
 import Data.Aeson
+import Data.Coerce
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
@@ -45,7 +46,7 @@ main = do
       refreshIguanaFile
     _ -> pure ()
 
-  Just peoples <- decodeFileStrict @[(Text, [Book])] ".iguana.json"
+  Just (coerce -> peoples) <- decodeFileStrict @[(Text, [JSONBook])] ".iguana.json"
 
   today <- (.utctDay) <$> getCurrentTime
 

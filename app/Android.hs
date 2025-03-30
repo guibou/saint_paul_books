@@ -87,7 +87,8 @@ niceAge (truncate -> age)
 refreshBooks :: User -> IO (Either Text (UTCTime, [Book]))
 refreshBooks User {..} = do
   resM <- try $ do
-    auth <- getLogin credential
+    session <- getIguanaSession
+    auth <- getLogin session credential
     items <- getLoan auth
     -- TODO: handle error here
     pure items
