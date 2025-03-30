@@ -26,6 +26,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.ByteString.Char8 (ByteString, pack)
+import Data.Coerce (coerce)
 import Data.Functor (($>), (<&>))
 import Data.List (intercalate, sortOn)
 import qualified Data.Map.Strict as Map
@@ -91,15 +92,16 @@ refreshBooks User {..} = do
     -- TODO: handle error here
     pure items
 
-  -- Write the payload to the disk
-  -- encodeFile ".iguana.json" res
-
   case resM of
     Right res -> do
-      case eitherDecode @[Book] (encode res) of
+      -- Write the payload to the disk
+      -- That's useful for debuging the payload content
+      encodeFile ".iguana.json" res
+
+      case eitherDecode @[JSONBook] (encode res) of
         Right books -> do
           mtime <- getCurrentTime
-          pure $ Right (mtime, books)
+          pure $ Right (mtime, coerce books)
         Left err -> pure (Left $ Text.pack err)
     Left (err :: SomeException) -> do
       pure $ Left (tshow err)
@@ -117,6 +119,12 @@ css =
     intercalate
       "\n"
       [ "",
+        ".details {",
+        "   position: absolute;",
+        "   top: 0px;",
+        "   left: 0px;",
+        "   background: white;",
+        "}",
         ""
       ]
 
@@ -315,6 +323,18 @@ displayBook book today settingsDyn = do
         )
       $ text
       $ tshow elapsedDays <> " / " <> tshow LoanMaxDays
+    el "td" $ mdo
+      showE <- button "🛈"
+
+      visibleDyn <- foldDyn (\f x -> f x) False $ leftmost [not <$ showE, const False <$ closeE]
+
+      closeE <- elDynAttr "el" (visibleDyn <&> \visible -> "class" =: "details" <> "style" =: if visible then "display: block" else "display: none") $ do
+        closeE <- elAttr "div" ("class" =: "close") $ button "x"
+        elAttr "img" ("src" =: cover book) $ pure ()
+        el "div" $ text $ "author:" <> author book
+        el "div" $ text $ "full title:" <> fullTitle book
+        pure $ closeE
+      pure ()
 
 refreshBooksCallback :: (MonadIO m) => User -> (Either Text (UTCTime, [Book]) -> IO ()) -> m ()
 refreshBooksCallback credential callback = do
