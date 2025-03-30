@@ -1,36 +1,49 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Books where
 
 import Data.Aeson
+import Data.Aeson.Types (Parser)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Time (Day, defaultTimeLocale)
-import Data.Time.Format (formatTime, parseTimeM)
+import Data.Time.Format (parseTimeM)
 import GHC.Generics
 
 -- | A book loan
 data Book = Book
   { title :: Text,
-    dueDate :: Day
+    fullTitle :: Text,
+    dueDate :: Day,
+    author :: Text,
+    cover :: Text
   }
-  deriving (Show, Generic, Eq)
+  deriving (Show, Generic, Eq, ToJSON, FromJSON)
 
-instance FromJSON Book where
-  parseJSON = withObject "Book" $ \o -> do
-    Book <$> (cleanTitle <$> o .: "title") <*> (cleanDate =<< o .: "dueDate")
+newtype JSONBook = JSONBook Book
 
-instance ToJSON Book where
-  toJSON book =
-    object
-      [ "title" .= title book,
-        "dueDate" .= formatTime defaultTimeLocale "%Y%m%d" (dueDate book)
-      ]
+instance FromJSON JSONBook where
+  parseJSON value = JSONBook <$> bookFromJSON value
+
+-- | This is used to parse a Book from the iguana json payload
+-- The ToJSON / FromJSON instances for Book are used for internal API serialization
+bookFromJSON :: Value -> Parser Book
+bookFromJSON = withObject "Book" $ \o -> do
+  title <- cleanTitle <$> o .: "title"
+  dueDate <- cleanDate =<< o .: "dueDate"
+  author <- o .: "author"
+  cover <- cleanImage <$> (o .: "image")
+  fullTitle <- o .: "title"
+  pure $ Book {..}
 
 cleanDate :: (MonadFail m) => String -> m Day
 cleanDate = parseTimeM False defaultTimeLocale "%Y%m%d"
 
 cleanTitle :: Text -> Text
 cleanTitle = Text.strip . Text.takeWhile (/= '[')
+
+cleanImage :: Text -> Text
+cleanImage t = Text.takeWhile (/= '!') t
