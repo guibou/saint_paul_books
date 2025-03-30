@@ -174,9 +174,11 @@ main = do
                         text "/"
                         text $ tshow $ length refreshingState
           booksE <- elAttr "a" ("href" =: "#books") $ button "🕮"
-          settingsE <- elAttr "a" ("href" =: "#settings") $ button "⚙"
           cardsE <- elAttr "a" ("href" =: "#cards") $ button "🃟"
+          text "-"
           refreshE <- button "⟳"
+          text "-"
+          settingsE <- elAttr "a" ("href" =: "#settings") $ button "⚙"
           pure
             ( refreshE,
               leftmost
