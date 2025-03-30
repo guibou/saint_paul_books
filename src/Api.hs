@@ -72,16 +72,21 @@ extractSessionId t = do
   where
     sessionIdPrefix = "Vfocus.Settings.sessionID = '"
 
--- | Log to the library. Returns an 'Auth' which is valid for a few time (not
--- clear how much).
-getLogin :: Credential -> IO Auth
-getLogin Credential {..} = do
+newHttpConfig :: IO HttpConfig
+newHttpConfig = do
   --
   -- See
   -- https://groups.google.com/g/yesodweb/c/7Lwzl2fvsZY/m/NjVpqGk1KlIJ?pli=1
   -- for a discussion about not certified CA
   manager <- newTlsManagerWith (mkManagerSettings (TLSSettingsSimple True False False) Nothing)
   let httpConfig = defaultHttpConfig {httpConfigAltManager = Just manager}
+  pure httpConfig
+
+-- | Log to the library. Returns an 'Auth' which is valid for a few time (not
+-- clear how much).
+getLogin :: Credential -> IO Auth
+getLogin Credential {..} = do
+  httpConfig <- newHttpConfig
 
   -- Step 1: get the first session id and associated cookie jar
   --
@@ -127,8 +132,7 @@ getLogin Credential {..} = do
 -- | Returns all the book owned by an authenticated user
 getLoan :: Auth -> IO [Value]
 getLoan Auth {..} = do
-  manager <- newTlsManagerWith (mkManagerSettings (TLSSettingsSimple True False False) Nothing)
-  let httpConfig = defaultHttpConfig {httpConfigAltManager = Just manager}
+  httpConfig <- newHttpConfig
 
   response <- runReq httpConfig $ do
     req
