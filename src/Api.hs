@@ -88,8 +88,10 @@ newHttpConfig = do
   let httpConfig = defaultHttpConfig {httpConfigAltManager = Just manager}
   pure httpConfig
 
-iguanaRequest :: (FromJSON res) => HttpConfig -> IguanaSession -> Text -> [Pair] -> IO (JsonResponse res)
-iguanaRequest httpConfig IguanaSession {..} method payload = do
+iguanaRequest :: (FromJSON res) => IguanaSession -> Text -> [Pair] -> IO (JsonResponse res)
+iguanaRequest IguanaSession {..} method payload = do
+  httpConfig <- newHttpConfig
+
   response <- runReq httpConfig $ do
     req
       POST
@@ -103,10 +105,9 @@ iguanaRequest httpConfig IguanaSession {..} method payload = do
       )
   pure response
 
--- | Log to the library. Returns an 'Auth' which is valid for a few time (not
--- clear how much).
-getLogin :: Credential -> IO Auth
-getLogin Credential {..} = do
+-- | Step 1: get the first session id and associated cookie jar
+getIguanaSession :: IO IguanaSession
+getIguanaSession = do
   httpConfig <- newHttpConfig
 
   -- Step 1: get the first session id and associated cookie jar
@@ -121,11 +122,14 @@ getLogin Credential {..} = do
 
   let cookies = responseCookieJar response
   let iguanaSessionId = extractSessionId (responseBody response)
-  let iguanaSession = IguanaSession {..}
+  pure IguanaSession {..}
 
-  -- Step 2: login
+-- | Log to the library. Returns an 'Auth' which is valid for a few time (not
+-- clear how much).
+getLogin :: IguanaSession -> Credential -> IO Auth
+getLogin iguanaSession Credential {..} = do
   response <-
-    iguanaRequest httpConfig iguanaSession "user/credentials" $
+    iguanaRequest iguanaSession "user/credentials" $
       -- Note: most of these keys appears in the query I reverse
       -- engineered. I'm too lazy to try to remove some of them.
       [ "language" .= ("fre" :: Text),
@@ -136,15 +140,13 @@ getLogin Credential {..} = do
         "institution" .= ("" :: Text)
       ]
   let Response session = responseBody response :: Response Session
-  pure $ Auth {iguanaSession = IguanaSession {..}, ..}
+  pure $ Auth {..}
 
 -- | Returns all the book owned by an authenticated user
 getLoan :: Auth -> IO [Value]
 getLoan Auth {..} = do
-  httpConfig <- newHttpConfig
-
   response <-
-    iguanaRequest httpConfig iguanaSession "user/loans" $
+    iguanaRequest iguanaSession "user/loans" $
       [ "sessionId" .= sessionId session,
         -- Note: most of these keys appears in the query I reverse
         -- engineered. I'm too lazy to try to remove some of them.
@@ -163,8 +165,12 @@ data User = User
 -- Refresh everything
 refresh :: [User] -> IO [(Text, [Value])]
 refresh users = do
+  -- We can get the session logic before refreshing
+  -- NOTE: it could be possible in theory to keep that, but it is unclear how
+  -- much time the session ids and auths are kept alive by the server.
+  iguanaSession <- getIguanaSession
   forConcurrently users $ \User {..} -> do
-    auth <- getLogin credential
+    auth <- getLogin iguanaSession credential
     items <- getLoan auth
     -- TODO: handle error here
     pure (displayName, items)
