@@ -1,0 +1,76 @@
+@import url("https://www.nerdfonts.com/assets/css/webfont.css");
+
+.late-critical {
+    color: red
+}
+
+.late-ok {
+    color: goldenrod
+}
+
+.books td {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.books {
+    width: 100%
+}
+
+.menu nf {
+    font-size: 1.2em;
+}
+
+
+.menu div {
+  font-size: 1.2em;
+  background: white;
+
+  display: flex;
+  justify-content: space-around;
+  flex-wrap: wrap;
+}
+
+#cards:not(:target) {
+    display: none;
+}
+
+#settings:not(:target) {
+    display: none;
+}
+
+#cards:target ~ #books {
+   display: none;
+   }
+
+#settings:target ~ #books {
+   display: none;
+   }
+
+#status {
+    display: flex;
+    justify-content: space-between;
+}
+
+#details:not(:target) {
+    display: none;
+}
+
+#details:target ~ #books {
+    display: none;
+}
+
+#status div {
+    display: flex-item;
+}
+
+
+.barcode-parent {
+    display: flex;
+    justify-content: center;
+}
+
+.barcode {
+    width: 70%;
+}
