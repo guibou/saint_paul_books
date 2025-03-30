@@ -47,6 +47,7 @@ getIguanaSession = do
   -- Step 1: get the first session id and associated cookie jar
   --
   response <- runReq httpConfig $ do
+    -- TODO: why is this post ?
     req
       POST
       (iguana_root /: "www.main.cls")
