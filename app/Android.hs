@@ -1,5 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
@@ -103,14 +105,20 @@ refreshBooks User {..} = do
       pure $ Left (tshow err)
 
 data RefreshStatus = Refreshing | Idle | RefreshError Text
-  deriving (Show)
+  deriving (Show, Eq)
+
+isError :: _
+isError (RefreshError _) = True
+isError _ = False
 
 css :: ByteString
 css =
   pack $
     intercalate
       "\n"
-      []
+      [ "",
+        ""
+      ]
 
 data Visibility = BooksVisibility | SettingsVisibility | CardsVisibility
   deriving (Eq, Show)
@@ -124,6 +132,8 @@ main = do
       credentialsUniqDyn <- holdUniqDyn ((credentials) <$> (settingsDyn))
 
       settingsDyn <- foldDyn (\f x -> f x) initSetting updateSettings
+
+      let globalRefreshingStates = join $ fmap distributeListOverDyn ((map fst . Map.elems) <$> allBooks')
 
       -- Header widget
       headerE <- el "div" $ do
@@ -151,8 +161,18 @@ main = do
                 )
                 $ text
                   ""
-              text $
-                niceAge iguanaAge
+
+              dyn_ $
+                globalRefreshingStates <&> \refreshingState ->
+                  if
+                    | all (== Idle) refreshingState -> text $ niceAge iguanaAge
+                    | any isError refreshingState -> text $ "Error"
+                    | otherwise -> do
+                        let nb_done = length $ filter (== Idle) refreshingState
+                        text "Refreshing"
+                        text $ tshow $ nb_done
+                        text "/"
+                        text $ tshow $ length refreshingState
           booksE <- elAttr "a" ("href" =: "#books") $ button "🕮"
           settingsE <- elAttr "a" ("href" =: "#settings") $ button "⚙"
           cardsE <- elAttr "a" ("href" =: "#cards") $ button "🃟"
@@ -174,7 +194,7 @@ main = do
       let today = utctDay now
 
       -- Listing widget
-      let allBooks = join $ fmap distributeListOverDyn $ Map.elems <$> allBooks'
+      let allBooks = join $ fmap distributeListOverDyn $ (map snd . Map.elems) <$> allBooks'
       let allBooksInOneList = fmap (concat . fmap snd) allBooks
 
       let visibleDiv = elDivVisible changeVisibility
@@ -242,7 +262,7 @@ main = do
                           )
                           $ text ""
                   RefreshError t -> text t
-          el "table" $ do
+          booksDyn <- el "table" $ do
             -- TODO: the complete block is rebuilt if anything changes, but
             -- that's fine. Maybe later we could introduce finer grained updates
             void $ simpleList (snd <$> booksDyn) $ \bookDyn ->
@@ -250,6 +270,8 @@ main = do
                 bookDyn <&> \book ->
                   displayBook book today settingsDyn
             pure $ booksDyn
+
+          pure (refreshStatus, booksDyn)
 
       -- Settings
       --
