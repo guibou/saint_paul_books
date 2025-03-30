@@ -17,16 +17,14 @@
 module Main where
 
 import Api
+import ApiXmlXhr (refreshBook)
 import Books
-import Control.Concurrent.Async (async)
-import Control.Exception
 import Control.Monad (join, void)
 import Control.Monad.Fix (MonadFix)
-import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.IO.Class (liftIO)
 import Data.Aeson
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.ByteString.Char8 (ByteString, pack)
-import Data.Coerce (coerce)
 import Data.Functor (($>), (<&>))
 import Data.List (intercalate, sortOn)
 import qualified Data.Map.Strict as Map
@@ -83,29 +81,6 @@ niceAge (truncate -> age)
   | age < 3600 = tshow (age `div` 60) <> " minutes ago"
   | age < (3600 * 24) = tshow (age `div` 3600) <> " hours ago"
   | otherwise = tshow (age `div` (3600 * 24)) <> " days ago"
-
-refreshBooks :: User -> IO (Either Text (UTCTime, [Book]))
-refreshBooks User {..} = do
-  resM <- try $ do
-    session <- getIguanaSession
-    auth <- getLogin session credential
-    items <- getLoan auth
-    -- TODO: handle error here
-    pure items
-
-  case resM of
-    Right res -> do
-      -- Write the payload to the disk
-      -- That's useful for debuging the payload content
-      encodeFile ".iguana.json" res
-
-      case eitherDecode @[JSONBook] (encode res) of
-        Right books -> do
-          mtime <- getCurrentTime
-          pure $ Right (mtime, coerce books)
-        Left err -> pure (Left $ Text.pack err)
-    Left (err :: SomeException) -> do
-      pure $ Left (tshow err)
 
 data RefreshStatus = Refreshing | Idle | RefreshError Text
   deriving (Show, Eq)
@@ -226,10 +201,7 @@ main = do
                 [ updated userDyn,
                   tag (current userDyn) refreshButtonE
                 ]
-        (fanEither -> (updateError, updateBooks)) <-
-          performEventAsync $
-            refreshBooksCallback
-              <$> refreshEvent
+        (fanEither -> (updateError, updateBooks)) <- refreshBook refreshEvent
 
         refreshStatus <-
           foldDyn (\new _old -> new) Idle $
@@ -336,13 +308,6 @@ displayBook book today settingsDyn = do
         el "div" $ text $ "full title:" <> fullTitle book
         pure $ closeE
       pure ()
-
-refreshBooksCallback :: (MonadIO m) => User -> (Either Text (UTCTime, [Book]) -> IO ()) -> m ()
-refreshBooksCallback credential callback = do
-  void $ liftIO $ async $ do
-    resM <- refreshBooks credential
-    callback resM
-  pure ()
 
 settingsPanel :: (DomBuilder t m, MonadSample t m, PostBuild t m, MonadFix m, MonadHold t m) => Dynamic t Settings -> m (Event t (Settings -> Settings))
 settingsPanel settingsDyn = do

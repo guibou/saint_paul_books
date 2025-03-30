@@ -9,6 +9,7 @@
 {-# LANGUAGE NoFieldSelectors #-}
 
 import Api
+import ApiRequest
 import Books
 import Control.Monad (forM_)
 import Data.Aeson

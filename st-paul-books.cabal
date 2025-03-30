@@ -58,7 +58,7 @@ library
     import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules:  Api, Books
+    exposed-modules:  Api, Books, ApiRequest
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -113,7 +113,7 @@ executable st-paul-books
 
     -- .hs or .lhs file containing the Main module.
     main-is:          Android.hs
-    other-modules: Webstorage
+    other-modules: Webstorage, ApiXmlXhr
 
     -- Modules included in this executable, other than Main.
     -- other-modules:
