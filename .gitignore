@@ -1,3 +1,6 @@
 credentials.json
 dist-newstyle
 release-key.keystore
+
+result
+.iguana.json
