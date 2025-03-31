@@ -107,10 +107,16 @@ css =
 data Visibility = BooksVisibility | SettingsVisibility | CardsVisibility
   deriving (Eq, Show)
 
+logWithTime :: (Text -> IO ()) -> Text -> IO ()
+logWithTime pushLog message = do
+  time <- getCurrentTime
+  pushLog (Text.pack (show time) <> message)
+
 main :: IO ()
 main = do
   mainWidgetWithCss css $
     mdo
+      (eventLog, pushLog) <- newTriggerEvent
       webStorageSettings <- webStorageDyn "settings" defaultSettings (updated settingsDyn)
       initSetting <- sample $ current webStorageSettings
       credentialsUniqDyn <- holdUniqDyn ((credentials) <$> (settingsDyn))
@@ -201,7 +207,7 @@ main = do
                 [ updated userDyn,
                   tag (current userDyn) refreshButtonE
                 ]
-        (fanEither -> (updateError, updateBooks)) <- refreshBook refreshEvent
+        (fanEither -> (updateError, updateBooks)) <- refreshBook (logWithTime pushLog) refreshEvent
 
         refreshStatus <-
           foldDyn (\new _old -> new) Idle $
@@ -260,6 +266,11 @@ main = do
       --
       updateSettings <- visibleDiv SettingsVisibility $ do
         updateSettings <- settingsPanel settingsDyn
+        el "details" $ do
+          el "summary" $ text "logs"
+          -- Keep only the latest 100 lines of log
+          logDyn <- foldDyn (\x l -> take 100 $ x : l) [] eventLog
+          el "pre" $ dynText (Text.unlines <$> logDyn)
         pure updateSettings
       pure ()
 

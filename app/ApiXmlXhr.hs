@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -19,29 +20,41 @@ import qualified Data.Text as Text
 import Data.Time
 import Reflex.Dom
 
-refreshBook :: (TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => Event t User -> m (Event t (Either Text (UTCTime, [Book])))
-refreshBook userEvent = performEventAsync $ refreshBooksCallback <$> userEvent
+refreshBook :: (TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> Event t User -> m (Event t (Either Text (UTCTime, [Book])))
+refreshBook pushLog userEvent = performEventAsync $ (refreshBooksCallback pushLog) <$> userEvent
 
-refreshBooksCallback :: (MonadIO m) => User -> (Either Text (UTCTime, [Book]) -> IO ()) -> m ()
-refreshBooksCallback credential callback = do
+refreshBooksCallback :: (MonadIO m) => (Text -> IO ()) -> User -> (Either Text (UTCTime, [Book]) -> IO ()) -> m ()
+refreshBooksCallback pushLog credential callback = do
+  let logWithName t = pushLog (displayName credential <> ": " <> t)
   void $ liftIO $ async $ do
-    resM <- try $ refreshBooks  credential
+    resM <- try $ refreshBooks logWithName credential
     res <- case resM of
       Right res -> pure res
       Left (err :: SomeException) -> do
+        pushLog "done error"
         pure $ Left (Text.pack $ show err)
 
     callback res
   pure ()
 
-refreshBooks :: User -> IO (Either Text (UTCTime, [Book]))
-refreshBooks User {..} = do
-  session <- getIguanaSession
-  auth <- getLogin session credential
-  items <- getLoan auth
-  -- TODO: handle error here
-  case eitherDecode @[JSONBook] (encode items) of
-    Right books -> do
-      mtime <- getCurrentTime
-      pure $ Right (mtime, coerce books)
-    Left err -> pure (Left $ Text.pack err)
+refreshBooks :: (Text -> IO ()) -> User -> IO (Either Text (UTCTime, [Book]))
+refreshBooks pushLog User {..} = do
+  let logSection section action = do
+        let start = do
+              pushLog ("starting " <> section)
+              t <- getCurrentTime
+              pure t
+            end t = do
+              t' <- getCurrentTime
+              let deltaTime = t' `diffUTCTime` t
+              pushLog ("ending " <> section <> " in " <> Text.pack (show deltaTime))
+        bracket start end (const action)
+  logSection "refreshBooks" $ do
+    session <- logSection "getIguanaSession" getIguanaSession
+    auth <- logSection "getLogin" $ getLogin session credential
+    items <- logSection "getLoan" $ getLoan auth
+    case eitherDecode @[JSONBook] (encode items) of
+      Right books -> do
+        mtime <- getCurrentTime
+        pure $ Right (mtime, coerce books)
+      Left err -> pure (Left $ Text.pack err)
