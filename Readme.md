@@ -18,14 +18,12 @@ Fill the `credentials.json` file as such:
 ```json
 [
   {
-    "user": "X00000000001",
-    "password": "01010101",
-    "name": "displayname1"
+    "credential": {"login": "X0000000001", "password": "01010101"},
+    "displayName": "Laureline"
   },
   {
-    "user": "X000000002",
-    "password": "02020202",
-    "name": "displayname2"
+    "credential": {"login": "X0000000001", "password": "02020202"},
+    "displayName": "Xena"
   }
 ]
 ```
@@ -46,7 +44,13 @@ The `--refresh` flag can be ignored on future run unless you want to refresh the
 
 # Android UI
 
-- Create a `release-key.keystore` file (look in flake.nix for the receipt)
+- Create a `release-key.keystore` file:
+
+```
+nix shell nixpkgs#zulu.out
+keytool -genkey -v -keystore release-key.keystore -alias alias -keyalg RSA -keysize 2048 -validity 10000
+```
+
 - Build the UI with: `nix build --impure path:.\#ui.android.st-paul-books`
 - Deploy with `./result/bin/deploy` (if phone connect with `adb`) or just download the APK on the phone.
 
