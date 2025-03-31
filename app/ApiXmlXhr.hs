@@ -3,11 +3,12 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module ApiXmlXhr where
 
 import Api hiding (iguana_root)
-import ApiRequest
+-- import ApiRequest
 import Books
 import Control.Concurrent.Async (async)
 import Control.Exception
@@ -20,7 +21,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import Data.Time
-import Debug.Trace (traceShow)
+import Debug.Trace (traceShow, traceShowId)
 import Language.Javascript.JSaddle (MonadJSM)
 import Reflex.Dom
 
@@ -39,6 +40,9 @@ refreshBooksCallback credential callback = do
   pure ()
 
 refreshBooks :: User -> IO (Either Text (UTCTime, [Book]))
+refreshBooks user = pure $ Left "Not finished"
+
+{-
 refreshBooks User {..} = do
   resM <- try $ do
     session <- getIguanaSession
@@ -60,16 +64,17 @@ refreshBooks User {..} = do
         Left err -> pure (Left $ Text.pack err)
     Left (err :: SomeException) -> do
       pure $ Left (Text.pack $ show err)
+-}
 
 getIguanaSession' event = do
   -- TODO: why is this POST?
-  let request = XhrRequest "POST" (iguana_root <> "/Rest.Server.cls") def
+  let request = XhrRequest "POST" (iguana_root <> "/Rest.Server.cls") (def {_xhrRequestConfig_withCredentials = False})
   response <- performRequestAsync (request <$ event)
   pure $ _xhrResponse_responseText <$> response
 
 extractIguanaSession :: XhrResponse -> Maybe IguanaSession
 extractIguanaSession response = do
-  responseBody <- _xhrResponse_responseText response
+  (traceShowId -> responseBody) <- _xhrResponse_responseText response
   let headers = _xhrResponse_headers response
 
   -- TODO: the extract session logic could be converted to Text

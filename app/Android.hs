@@ -37,8 +37,9 @@ import Data.Text.Lazy.Encoding (decodeUtf8)
 import Data.Text.Read (decimal)
 import Data.Time
 import GHC.Generics
-import Reflex.Dom
+import Reflex.Dom.Core
 import Webstorage (webStorageDyn)
+import Language.Javascript.JSaddle.Warp
 
 pattern CapacityPerUser :: Int
 pattern CapacityPerUser = 10
@@ -108,7 +109,10 @@ data Visibility = BooksVisibility | SettingsVisibility | CardsVisibility
   deriving (Eq, Show)
 
 main :: IO ()
-main = do
+main = run 8085 widget
+
+widget :: _
+widget = do
   mainWidgetWithCss css $
     mdo
       webStorageSettings <- webStorageDyn "settings" defaultSettings (updated settingsDyn)
