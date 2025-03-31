@@ -94,7 +94,7 @@ css =
   pack $
     intercalate
       "\n"
-      [ "",
+      [ "@import \"https://www.nerdfonts.com/assets/css/webfont.css\"",
         ".details {",
         "   position: absolute;",
         "   top: 0px;",
@@ -103,6 +103,11 @@ css =
         "}",
         ""
       ]
+
+nerdFontButton :: (DomBuilder t m) => Text -> m (Event t ())
+nerdFontButton nfClass = do
+  (event, _) <- elAttr' "i" ("class" =: ("nf " <> nfClass)) $ pure ()
+  pure $ domEvent Click event
 
 data Visibility = BooksVisibility | SettingsVisibility | CardsVisibility
   deriving (Eq, Show)
@@ -163,12 +168,12 @@ main = do
                         text $ tshow $ nb_done
                         text "/"
                         text $ tshow $ length refreshingState
-          booksE <- elAttr "a" ("href" =: "#books") $ button "🕮"
-          cardsE <- elAttr "a" ("href" =: "#cards") $ button "🃟"
+          booksE <- elAttr "a" ("href" =: "#books") $ nerdFontButton "nf-cod-book"
+          cardsE <- elAttr "a" ("href" =: "#cards") $ nerdFontButton "nf-fa-id_card"
           text "-"
-          refreshE <- button "⟳"
+          refreshE <- nerdFontButton "nf-md-reload"
           text "-"
-          settingsE <- elAttr "a" ("href" =: "#settings") $ button "⚙"
+          settingsE <- elAttr "a" ("href" =: "#settings") $ nerdFontButton "nf-cod-settings_gear"
           pure
             ( refreshE,
               leftmost
@@ -178,7 +183,7 @@ main = do
                 ]
             )
 
-      refreshButtonE <- switchHold never (fst <$> headerE)
+      refreshnerdFontButtonE <- switchHold never (fst <$> headerE)
       changeVisibilityE <- switchHold never (snd <$> headerE)
       changeVisibility <- foldDyn const BooksVisibility changeVisibilityE
 
@@ -205,7 +210,7 @@ main = do
         let refreshEvent =
               leftmost
                 [ updated userDyn,
-                  tag (current userDyn) refreshButtonE
+                  tag (current userDyn) refreshnerdFontButtonE
                 ]
         (fanEither -> (updateError, updateBooks)) <- refreshBook (logWithTime pushLog) refreshEvent
 
@@ -308,12 +313,12 @@ displayBook book today settingsDyn = do
       $ text
       $ tshow elapsedDays <> " / " <> tshow LoanMaxDays
     el "td" $ mdo
-      showE <- button "🛈"
+      showE <- nerdFontButton "nf-fa-image"
 
       visibleDyn <- foldDyn (\f x -> f x) False $ leftmost [not <$ showE, const False <$ closeE]
 
       closeE <- elDynAttr "el" (visibleDyn <&> \visible -> "class" =: "details" <> "style" =: if visible then "display: block" else "display: none") $ do
-        closeE <- elAttr "div" ("class" =: "close") $ button "x"
+        closeE <- elAttr "div" ("class" =: "close") $ nerdFontButton "nf-md-close_circle"
         elAttr "img" ("src" =: cover book) $ pure ()
         el "div" $ text $ "author:" <> author book
         el "div" $ text $ "full title:" <> fullTitle book
