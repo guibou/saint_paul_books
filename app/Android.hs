@@ -101,6 +101,8 @@ css =
         "   left: 0px;",
         "   background: white;",
         "}",
+        "*",
+        "* { font-size: 110% }",
         ""
       ]
 
@@ -136,33 +138,39 @@ main = do
           case books of
             [] -> text "No user, add them in the Setting panel"
             _ -> do
-              let oldest_update = minimum (map fst books)
-              now <- liftIO $ getCurrentTime
-              let iguanaAge = now `diffUTCTime` oldest_update
-
-              let total = sum $ map (\(_mtime, items) -> length @[] items) books
-                  capacity = length books * CapacityPerUser
-
-              text $ tshow total <> "/" <> tshow capacity
-              elDynAttr
-                "meter"
-                ( settingsDyn
-                    <&> \Settings {..} ->
-                      [ ("min", "0"),
-                        ("max", tshow capacity),
-                        ("high", tshow $ capacity - capacityThreshold),
-                        ("value", tshow total)
-                      ]
-                )
-                $ text
-                  ""
-
               dyn_ $
                 globalRefreshingStates <&> \refreshingState ->
                   if
-                    | all (== Idle) refreshingState -> text $ niceAge iguanaAge
-                    | any isError refreshingState -> text $ "Error"
+                    | all (== Idle) refreshingState -> do
+                        let oldest_update = minimum (map fst books)
+                        now <- liftIO $ getCurrentTime
+                        let iguanaAge = now `diffUTCTime` oldest_update
+
+                        let total = sum $ map (\(_mtime, items) -> length @[] items) books
+                            capacity = length books * CapacityPerUser
+
+                        text $ tshow total <> "/" <> tshow capacity
+                        elDynAttr
+                          "meter"
+                          ( settingsDyn
+                              <&> \Settings {..} ->
+                                [ ("min", "0"),
+                                  ("max", tshow capacity),
+                                  ("high", tshow $ capacity - capacityThreshold),
+                                  ("value", tshow total)
+                                ]
+                          )
+                          $ text
+                            ""
+
+                        text $ niceAge iguanaAge
+                    | any isError refreshingState -> text $ "Error when refreshing, see logs"
                     | otherwise -> do
+                        elAttr
+                          "progress"
+                          []
+                          $ text
+                            ""
                         let nb_done = length $ filter (== Idle) refreshingState
                         text "Refreshing"
                         text $ tshow $ nb_done
