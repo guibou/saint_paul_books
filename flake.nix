@@ -12,11 +12,10 @@
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      reflex-platform,
-      ...
+    { self
+    , nixpkgs
+    , reflex-platform
+    , ...
     }:
     let
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
@@ -28,15 +27,15 @@
         haskellOverlays = [
           (
             selfPkgs: superPkgs:
-            let
-              pkgs = superPkgs.callPackage ({ pkgs }: pkgs) { };
-            in
-            {
-              # Takes hours to check
-              RSA = pkgs.haskell.lib.dontCheck superPkgs.RSA;
-              # Force static build so android does not fails at link time
-              zlib = pkgs.haskell.lib.enableCabalFlag superPkgs.zlib "bundled-c-zlib";
-            }
+              let
+                pkgs = superPkgs.callPackage ({ pkgs }: pkgs) { };
+              in
+              {
+                # Takes hours to check
+                RSA = pkgs.haskell.lib.dontCheck superPkgs.RSA;
+                # Force static build so android does not fails at link time
+                zlib = pkgs.haskell.lib.enableCabalFlag superPkgs.zlib "bundled-c-zlib";
+              }
           )
         ];
       };
@@ -99,6 +98,10 @@
             pkgs.cabal-install
             pkgs.haskellPackages.haskell-language-server
           ];
+
+          shellHook = ''
+            export GIO_MODULE_DIR=${pkgs.glib-networking}/lib/gio/modules/
+          '';
         });
       };
     };
