@@ -19,7 +19,8 @@ data Book = Book
     fullTitle :: Text,
     dueDate :: Day,
     author :: Text,
-    cover :: Text
+    cover :: Text,
+    barcode :: Text
   }
   deriving (Show, Generic, Eq, ToJSON, FromJSON)
 
@@ -37,6 +38,7 @@ bookFromJSON = withObject "Book" $ \o -> do
   author <- o .: "author"
   cover <- cleanImage <$> (o .: "image")
   fullTitle <- o .: "title"
+  barcode <- o .: "barcode"
   pure $ Book {..}
 
 cleanDate :: (MonadFail m) => String -> m Day

@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedLists #-}
@@ -17,11 +18,11 @@
 module Main where
 
 import Api
-import ApiXmlXhr (refreshBook)
+import ApiXmlXhr (refreshBook, renewBookAsync)
 import Books
 import Control.Monad (join, void)
 import Control.Monad.Fix (MonadFix)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.ByteString.Char8 (ByteString, pack)
@@ -206,7 +207,7 @@ main = do
 
       visibleDiv BooksVisibility $ do
         _ <- listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn dueDate) <$> allBooksInOneList) $ \_idx bookDyn -> do
-          dyn_ ((\book -> displayBook book today settingsDyn) <$> bookDyn)
+          dyn_ ((\book -> displayBook pushLog Nothing book today settingsDyn) <$> bookDyn)
           pure ()
         pure ()
 
@@ -266,11 +267,12 @@ main = do
                   RefreshError t -> text t
           booksDyn <- el "table" $ do
             -- TODO: the complete block is rebuilt if anything changes, but
-            -- that's fine. Maybe later we could introduce finer grained updates
+            -- that's fine. Maybe later we could introduce finer grained
+            -- updates, for example, based on barcode
             void $ simpleList (snd <$> booksDyn) $ \bookDyn ->
               dyn $
-                bookDyn <&> \book ->
-                  displayBook book today settingsDyn
+                ((,) <$> bookDyn <*> userDyn) <&> \(book, user) ->
+                  displayBook pushLog (Just user) book today settingsDyn
             pure $ booksDyn
 
           pure (refreshStatus, booksDyn)
@@ -296,8 +298,8 @@ elDivVisible currentVisibleDyn name content = do
 
   elDynAttr "div" (toVisibility <$> currentVisibleDyn) content
 
-displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m) => Book -> Day -> Dynamic t Settings -> m ()
-displayBook book today settingsDyn = do
+displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> Maybe User -> Book -> Day -> Dynamic t Settings -> m ()
+displayBook pushLog userM book today settingsDyn = do
   el "tr" $ do
     let remainingDays = diffDays (dueDate book) today
     let elapsedDays = LoanMaxDays - fromIntegral remainingDays
@@ -330,6 +332,14 @@ displayBook book today settingsDyn = do
         elAttr "img" ("src" =: cover book) $ pure ()
         el "div" $ text $ "author:" <> author book
         el "div" $ text $ "full title:" <> fullTitle book
+
+        case userM of
+          Nothing -> pure ()
+          Just user -> do
+            renewE <- button "Renew"
+            renewBookAsync pushLog (renewE $> (book, user))
+            pure ()
+
         pure $ closeE
       pure ()
 

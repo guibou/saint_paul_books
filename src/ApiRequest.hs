@@ -1,13 +1,17 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module ApiRequest where
 
 import Api
+import Books
 import Control.Concurrent.Async (forConcurrently)
 import Data.Aeson
 import Data.Aeson.Types
 import Data.Text
+import GHC.Generics
 import Network.Connection (TLSSettings (..))
 import Network.HTTP.Client.TLS (mkManagerSettings, newTlsManagerWith)
 import Network.HTTP.Req
@@ -89,6 +93,29 @@ getLoan Auth {..} = do
         "sort" .= object ["sortBy" .= ("!" :: Text), "sortDirection" .= ("ASC" :: Text)]
       ]
   pure $ (let (Response (Items items)) = responseBody response :: Response Items in items)
+
+data RenewResponse = RenewResponse
+  { -- book barcode, useful as an entrypoint
+    barcode :: Text,
+    -- The new due date. The book could be updated
+    dueDate :: Text,
+    refusalReason :: Text,
+    -- 0 or 1, based on the success
+    success :: Int
+  }
+  deriving (Show, Generic, FromJSON)
+
+data Results x = Results {results :: x}
+  deriving (Show, Generic, FromJSON)
+
+refreshLoan :: Auth -> Book -> IO [RenewResponse]
+refreshLoan Auth {..} Book {..} = do
+  response <-
+    iguanaRequest iguanaSession "user/renewal" $
+      [ "sessionId" .= sessionId session,
+        "items" .= barcode
+      ]
+  pure $ (let (Response (Results val)) = responseBody response :: Response (Results [RenewResponse]) in val)
 
 -- Refresh everything
 refresh :: [User] -> IO [(Text, [Value])]
