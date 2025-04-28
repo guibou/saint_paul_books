@@ -11,6 +11,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -25,9 +26,10 @@ import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson
 import Data.Aeson.Encode.Pretty (encodePretty)
-import Data.ByteString.Char8 (ByteString, pack)
+import Data.ByteString.Char8 (ByteString)
+import Data.FileEmbed
 import Data.Functor (($>), (<&>))
-import Data.List (intercalate, sortOn)
+import Data.List (sortOn)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isJust)
 import Data.Text (Text)
@@ -91,21 +93,7 @@ isError (RefreshError _) = True
 isError _ = False
 
 css :: ByteString
-css =
-  pack $
-    intercalate
-      "\n"
-      [ "@import url(\"https://www.nerdfonts.com/assets/css/webfont.css\");",
-        ".details {",
-        "   position: absolute;",
-        "   top: 0px;",
-        "   left: 0px;",
-        "   background: white;",
-        "}",
-        "*",
-        "* { font-size: 110% }",
-        ""
-      ]
+css = $(embedFile "static/style.css")
 
 nerdFontButton :: (DomBuilder t m) => Text -> m (Event t ())
 nerdFontButton nfClass = do

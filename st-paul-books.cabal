@@ -124,7 +124,7 @@ executable st-paul-books
     -- Other library packages from which modules are imported.
     build-depends:
         base,
-        st-paul-books, reflex-dom, reflex-dom-core, text, aeson, time, aeson-pretty, bytestring, async, jsaddle, containers
+        st-paul-books, reflex-dom, reflex-dom-core, text, aeson, time, aeson-pretty, bytestring, async, jsaddle, containers, file-embed
 
     -- Directories containing source files.
     hs-source-dirs:   app

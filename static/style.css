@@ -1,0 +1,12 @@
+@import url("https://www.nerdfonts.com/assets/css/webfont.css");
+
+.details {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    background: white;
+}
+
+* {
+    font-size: 110%
+}
