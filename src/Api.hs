@@ -33,7 +33,7 @@ data Credential = Credential
   { login :: Text,
     password :: Text
   }
-  deriving (FromJSON, ToJSON, Generic, Show, Eq)
+  deriving (FromJSON, ToJSON, Generic, Show, Eq, Ord)
 
 -- A response in the iguana api, contains a payload
 data Response t = Response {response :: t}
