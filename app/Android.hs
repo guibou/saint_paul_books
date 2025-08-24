@@ -37,11 +37,15 @@ import qualified Data.Text as Text
 import Data.Text.Encoding (encodeUtf8)
 import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Encoding (decodeUtf8)
+import qualified Data.Text.Encoding as TE
 import Data.Text.Read (decimal)
 import Data.Time
 import GHC.Generics
 import Reflex.Dom
 import Webstorage (webStorageDyn)
+import Language.Javascript.JSaddle (liftJSM)
+import Language.Javascript.JSaddle.Object
+import Control.Lens ((^.))
 
 pattern CapacityPerUser :: Int
 pattern CapacityPerUser = 10
@@ -108,10 +112,17 @@ logWithTime pushLog message = do
   time <- getCurrentTime
   pushLog (Text.pack (show time) <> message)
 
+headWidget :: DomBuilder t m => m ()
+headWidget = do
+  elAttr "script" ("src" =: "https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js") $ pure ()
+  elAttr "style" ("type" =: "text/css") $ text $ TE.decodeUtf8 css
+
 main :: IO ()
 main = do
-  mainWidgetWithCss css $
+  mainWidgetWithHead headWidget $
     mdo
+      elAttr "script" ("src" =: "https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js") $ pure ()
+
       (eventLog, pushLog) <- newTriggerEvent
       webStorageSettings <- webStorageDyn "settings" defaultSettings (updated settingsDyn)
       initSetting <- sample $ current webStorageSettings
@@ -253,6 +264,14 @@ main = do
                           )
                           $ text ""
                   RefreshError t -> text t
+          el "div" $ do
+             -- I don't really understand, but if there is no delay, the
+             -- barcode is not displayed correctly.
+             -- I will investigate later, but for now, it works simply.
+             b <- getPostBuild
+             b' <- delay 1 b
+             barcodeWidget b' login
+
           booksDyn <- el "table" $ do
             -- TODO: the complete block is rebuilt if anything changes, but
             -- that's fine. Maybe later we could introduce finer grained
@@ -399,3 +418,23 @@ inputNumber defaultValue = mdo
     )
     defaultValue
     (updated $ value elem)
+
+-- | Display a barcode code128 on a event
+barcodeWidget :: _ => _ -> _ -> m ()
+barcodeWidget event value = do
+            elAttr "canvas" (
+              "class" =: "barcode" <>
+              "jsbarcode-format" =: "code128" <>
+              "jsbarcode-value" =: value <>
+              "jsbarcode-textmargin" =: "0" <>
+              "jsbarcode-fontoptions" =: "bold" <>
+              "jsbarcode-height" =: "40"
+               ) $ pure ()
+
+            let
+                foo = liftJSM $ do
+                   v <- jsg1 ("JsBarcode" :: String) (".barcode" :: String)
+                   _ <- v ^. js0 ("init" :: String)
+
+                   pure ()
+            performEvent_ (event $> foo)
