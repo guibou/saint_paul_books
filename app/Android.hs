@@ -99,9 +99,16 @@ isError _ = False
 css :: ByteString
 css = $(embedFile "static/style.css")
 
+nerdFontItem :: DomBuilder t m => Text -> m ()
+nerdFontItem nfClass = elAttr "i" ("class" =: ("nf " <> nfClass)) $ pure ()
+
 nerdFontButton :: (DomBuilder t m) => Text -> m (Event t ())
 nerdFontButton nfClass = do
-  (event, _) <- elAttr' "i" ("class" =: ("nf " <> nfClass)) $ pure ()
+  (event, _) <- el' "span" $ nerdFontItem nfClass
+  pure $ domEvent Click event
+
+clickDiv innerWidget = do
+  (event, _) <- el' "div" $ innerWidget
   pure $ domEvent Click event
 
 data Visibility = BooksVisibility | SettingsVisibility | CardsVisibility
@@ -121,6 +128,12 @@ main :: IO ()
 main = do
   mainWidgetWithHead headWidget $
     mdo
+      pb <- getPostBuild
+      now <- liftIO $ getCurrentTime
+      tickE <- tickLossyFrom 1 now pb
+      currentClockE <- performEvent (liftIO getCurrentTime <$ tickE)
+      currentClock <- foldDyn (\now _ -> now) now currentClockE
+
       (eventLog, pushLog) <- newTriggerEvent
       webStorageSettings <- webStorageDyn "settings" defaultSettings (updated settingsDyn)
       initSetting <- sample $ current webStorageSettings
@@ -133,68 +146,73 @@ main = do
       -- Header widget
       headerE <- el "div" $ do
         dyn $ flip fmap allBooks $ \books -> do
-          case books of
-            [] -> text "No user, add them in the Setting panel"
-            _ -> do
-              dyn_ $
-                globalRefreshingStates <&> \refreshingState ->
-                  if
-                    | all (== Idle) refreshingState -> do
-                        let oldest_update = minimum (map fst books)
-                        now <- liftIO $ getCurrentTime
-                        let iguanaAge = now `diffUTCTime` oldest_update
+          elAttr "div" ("class" =: "header") $ do
+            openMenuE <- nerdFontButton "nf-fa-bars"
+            event <- elAttr "div" ("class" =: "menu") $ mdo
 
-                        let total = sum $ map (\(_mtime, items) -> length @[] items) books
-                            capacity = length books * CapacityPerUser
-
-                        text $ tshow total <> "/" <> tshow capacity
-                        elDynAttr
-                          "meter"
-                          ( settingsDyn
-                              <&> \Settings {..} ->
-                                [ ("min", "0"),
-                                  ("max", tshow capacity),
-                                  ("high", tshow $ capacity - capacityThreshold),
-                                  ("value", tshow total)
-                                ]
-                          )
-                          $ text
-                            ""
-
-                        text $ niceAge iguanaAge
-                    | any isError refreshingState -> text $ "Error when refreshing, see logs"
-                    | otherwise -> do
-                        elAttr
-                          "progress"
-                          []
-                          $ text
-                            ""
-                        let nb_done = length $ filter (== Idle) refreshingState
-                        text "Refreshing"
-                        text $ tshow $ nb_done
-                        text "/"
-                        text $ tshow $ length refreshingState
-          booksE <- nerdFontButton "nf-cod-book"
-          cardsE <- nerdFontButton "nf-fa-id_card"
-          text "-"
-          refreshE <- nerdFontButton "nf-md-reload"
-          text "-"
-          settingsE <- nerdFontButton "nf-cod-settings_gear"
-          pure
-            ( refreshE,
-              leftmost
-                [ BooksVisibility <$ booksE,
-                  SettingsVisibility <$ settingsE,
-                  CardsVisibility <$ cardsE
+              menuVisibility <- foldDyn (\f v -> f v) False $ leftmost
+                [(not <$ openMenuE),
+                  (const False <$ refresh),
+                  (const False <$ navigate)
                 ]
-            )
+              es@(refresh, navigate) <- elDynAttr "div" (menuVisibility <&> \visibility ->
+                 if visibility then mempty else ("style" =: "display:none"))$ do
+                booksE <- clickDiv $ taggedAsSelected changeVisibility BooksVisibility $ 
+                  nerdFontButton "nf-cod-book" <* text "Livres"
+                cardsE <- clickDiv $ taggedAsSelected changeVisibility CardsVisibility $ 
+                  nerdFontButton "nf-fa-id_card" <* text "Cartes"
+                refreshE <- clickDiv $ do
+                  nerdFontButton "nf-md-reload" <* text "Reload"
+                settingsE <- clickDiv $ taggedAsSelected changeVisibility SettingsVisibility $ 
+                  nerdFontButton "nf-cod-settings_gear" <* text "Settings"
+                pure
+                  ( refreshE,
+                    leftmost
+                      [ BooksVisibility <$ booksE,
+                        SettingsVisibility <$ settingsE,
+                        CardsVisibility <$ cardsE
+                      ]
+                  )
+              pure es
 
+            case books of
+              [] -> text "No user, add them in the Setting panel"; 
+              _ -> do
+                dyn_ $
+                  globalRefreshingStates <&> \refreshingState ->
+                    if
+                      | all (== Idle) refreshingState -> do
+                          let oldest_update = minimum (map fst books)
+
+                          let total = sum $ map (\(_mtime, items) -> length @[] items) books
+                              capacity = length books * CapacityPerUser
+
+                          text "Capacity: "
+                          text $ tshow total <> "/" <> tshow capacity
+                          text " Refreshed: "
+
+                          dyn_ (currentClock <&> \now -> do
+                            let iguanaAge = now `diffUTCTime` oldest_update
+                            text $ niceAge iguanaAge
+                            )
+                      | any isError refreshingState -> text $ "Error when refreshing, see logs"
+                      | otherwise -> do
+                          elAttr
+                            "progress"
+                            []
+                            $ text
+                              ""
+                          let nb_done = length $ filter (== Idle) refreshingState
+                          text "Refreshing"
+                          text $ tshow $ nb_done
+                          text "/"
+                          text $ tshow $ length refreshingState
+            pure event
       refreshnerdFontButtonE <- switchHold never (fst <$> headerE)
       changeVisibilityE <- switchHold never (snd <$> headerE)
       changeVisibility <- foldDyn const BooksVisibility changeVisibilityE
 
-      now <- liftIO $ getCurrentTime
-      let today = utctDay now
+      let today = utctDay <$> currentClock
 
       -- Listing widget
       let allBooks = join $ fmap distributeListOverDyn $ (map (view _2) . Map.elems) <$> allBooks'
@@ -249,20 +267,6 @@ main = do
                         text $ tshow $ length books
                         text $ " / " <> tshow CapacityPerUser
                         text " "
-                        let minRemainingDays = case books of
-                              [] -> LoanMaxDays
-                              _ -> minimum $ map (\book -> fromIntegral $ diffDays (dueDate book) today) books
-                        elDynAttr
-                          "meter"
-                          ( settingsDyn
-                              <&> \Settings {..} ->
-                                [ ("min", "0"),
-                                  ("max", tshow LoanMaxDays),
-                                  ("low", tshow loanDayThreshold),
-                                  ("value", tshow minRemainingDays)
-                                ]
-                          )
-                          $ text ""
                   RefreshError t -> text t
           el "div" $ do
              -- I don't really understand, but if there is no delay, the
@@ -296,6 +300,8 @@ main = do
         pure updateSettings
       pure ()
 
+taggedAsSelected currentVisibilty targetedVisibility widget = elDynAttr "div" (currentVisibilty <&> \v -> if v == targetedVisibility then "class" =: "current" else mempty) $ widget
+
 elDivVisible :: (DomBuilder t m, PostBuild t m) => Dynamic t Visibility -> Visibility -> m a -> m a
 elDivVisible currentVisibleDyn name content = do
   let toVisibility :: Visibility -> Map.Map Text Text
@@ -305,23 +311,20 @@ elDivVisible currentVisibleDyn name content = do
 
   elDynAttr "div" (toVisibility <$> currentVisibleDyn) content
 
-displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> User -> Book -> Day -> m ()
+displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> User -> Book -> Dynamic t Day -> m ()
 displayBook pushLog user book today = do
   el "tr" $ do
-    let remainingDays = diffDays (dueDate book) today
-    let elapsedDays = LoanMaxDays - fromIntegral remainingDays
+    let remainingDays = diffDays (dueDate book) <$> today
     el "td" $ mdo
       (e, _) <- elDynAttr' "div" (set <&> \b -> if b then Map.singleton "style" "text-decoration-line: line-through" else []) $ text $ title book
       let click = domEvent Click e
       set <- foldDyn (\_ v -> not v) False click
       pure ()
-    let colorClass
+    let colorClass remainingDays
           | remainingDays > LoanMaxDays `div` 2 = "" :: Text
           | remainingDays > 3 = "late-ok"
           | otherwise = "late-critical"
-    elAttr "td" (
-      "class" =: colorClass
-      ) $ text $ tshow remainingDays <> " days"
+    elDynAttr "td" (("class" =:) . colorClass <$> remainingDays) $ dynText $ (( \remainingDays -> tshow remainingDays <> " days") <$> remainingDays)
     el "td" $ text $ Text.take 1 (displayName user)
     el "td" $ mdo
       showE <- nerdFontButton "nf-fa-image"

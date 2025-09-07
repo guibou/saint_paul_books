@@ -24,3 +24,28 @@
 .books {
     width: 100%
 }
+
+.header {
+    position: relative;
+}
+
+.menu {
+    position:absolute;
+    text-align: left;
+    left:0px;
+    top:1.5em;
+    z-index: 2;
+}
+
+.menu nf {
+    font-size: 1.2em;
+}
+
+.menu div {
+  font-size: 1.2em;
+  background: white;
+}
+
+.current {
+    font-weight: bold
+}
