@@ -45,7 +45,7 @@ import Reflex.Dom
 import Webstorage (webStorageDyn)
 import Language.Javascript.JSaddle (liftJSM)
 import Language.Javascript.JSaddle.Object
-import Control.Lens ((^.))
+import Control.Lens ((^.), view, _2, _1, _4)
 
 pattern CapacityPerUser :: Int
 pattern CapacityPerUser = 10
@@ -130,7 +130,7 @@ main = do
 
       settingsDyn <- foldDyn (\f x -> f x) initSetting updateSettings
 
-      let globalRefreshingStates = join $ fmap distributeListOverDyn ((map fst . Map.elems) <$> allBooks')
+      let globalRefreshingStates = join $ fmap distributeListOverDyn ((map (view _1) . Map.elems) <$> allBooks')
 
       -- Header widget
       headerE <- el "div" $ do
@@ -199,15 +199,16 @@ main = do
       let today = utctDay now
 
       -- Listing widget
-      let allBooks = join $ fmap distributeListOverDyn $ (map snd . Map.elems) <$> allBooks'
-      let allBooksInOneList = fmap (concat . fmap snd) allBooks
+      let allBooks = join $ fmap distributeListOverDyn $ (map (view _2) . Map.elems) <$> allBooks'
+      let chevalBooks = join $ fmap distributeListOverDyn $ (fmap (\(a, b, c) -> (,,) <$> a <*> b <*> c) . Map.elems) <$> allBooks'
+      let chevalBooks1 = concatMap (\(rs, (t, books), user) -> (rs, t, user, ) <$> books) <$> chevalBooks
 
       let visibleDiv = elDivVisible changeVisibility
 
       visibleDiv BooksVisibility $ do
         elAttr "table" ("class" =: "books") $ do
-          _ <- listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn dueDate) <$> allBooksInOneList) $ \_idx bookDyn -> do
-            dyn_ ((\book -> displayBook pushLog Nothing book today) <$> bookDyn)
+          _ <- listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn (dueDate . view _4)) <$> chevalBooks1) $ \_idx d -> do
+            dyn_ ((\(_, _, user, book) -> displayBook pushLog user book today) <$> d)
             pure ()
           pure ()
 
@@ -280,10 +281,10 @@ main = do
             void $ simpleList (snd <$> booksDyn) $ \bookDyn ->
               dyn $
                 ((,) <$> bookDyn <*> userDyn) <&> \(book, user) ->
-                  displayBook pushLog (Just user) book today
+                  displayBook pushLog user book today
             pure $ booksDyn
 
-          pure (refreshStatus, booksDyn)
+          pure (refreshStatus, booksDyn, userDyn)
 
       -- Settings
       --
@@ -306,8 +307,8 @@ elDivVisible currentVisibleDyn name content = do
 
   elDynAttr "div" (toVisibility <$> currentVisibleDyn) content
 
-displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> Maybe User -> Book -> Day -> m ()
-displayBook pushLog userM book today = do
+displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> User -> Book -> Day -> m ()
+displayBook pushLog user book today = do
   el "tr" $ do
     let remainingDays = diffDays (dueDate book) today
     let elapsedDays = LoanMaxDays - fromIntegral remainingDays
@@ -323,9 +324,7 @@ displayBook pushLog userM book today = do
     elAttr "td" (
       "class" =: colorClass
       ) $ text $ tshow remainingDays <> " days"
-    el "td" $ text $ Text.take 1 (case userM of
-       Just user -> displayName user
-       Nothing -> "")
+    el "td" $ text $ Text.take 1 (displayName user)
     el "td" $ mdo
       showE <- nerdFontButton "nf-fa-image"
 
@@ -337,12 +336,8 @@ displayBook pushLog userM book today = do
         el "div" $ text $ "author:" <> author book
         el "div" $ text $ "full title:" <> fullTitle book
 
-        case userM of
-          Nothing -> pure ()
-          Just user -> do
-            renewE <- button "Renew"
-            renewBookAsync pushLog (renewE $> (book, user))
-            pure ()
+        renewE <- button "Renew"
+        renewBookAsync pushLog (renewE $> (book, user))
 
         pure $ closeE
       pure ()
