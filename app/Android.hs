@@ -327,17 +327,10 @@ displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m, Trigge
 displayBook pushLog user book today = do
   el "tr" $ do
     let remainingDays = diffDays (dueDate book) <$> today
-    el "td" $ mdo
-      (e, _) <- elDynAttr' "div" (set <&> \b -> if b then Map.singleton "style" "text-decoration-line: line-through" else []) $ text $ title book
-      let click = domEvent Click e
-      set <- foldDyn (\_ v -> not v) False click
-      pure ()
     let colorClass remainingDays
           | remainingDays > LoanMaxDays `div` 2 = "" :: Text
           | remainingDays > 3 = "late-ok"
           | otherwise = "late-critical"
-    elDynAttr "td" (("class" =:) . colorClass <$> remainingDays) $ dynText $ (( \remainingDays -> tshow remainingDays <> " days") <$> remainingDays)
-    el "td" $ text $ Text.take 1 (displayName user)
     el "td" $ mdo
       showE <- nerdFontButton "nf-fa-image"
 
@@ -354,6 +347,14 @@ displayBook pushLog user book today = do
 
         pure $ closeE
       pure ()
+    el "td" $ text $ Text.take 1 (displayName user)
+    elDynAttr "td" (("class" =:) . colorClass <$> remainingDays) $ dynText $ (( \remainingDays -> tshow remainingDays <> "d") <$> remainingDays)
+    el "td" $ mdo
+      (e, _) <- elDynAttr' "div" (set <&> \b -> if b then Map.singleton "style" "text-decoration-line: line-through" else []) $ text $ title book
+      let click = domEvent Click e
+      set <- foldDyn (\_ v -> not v) False click
+      pure ()
+    pure ()
 
 settingsPanel :: (DomBuilder t m, MonadSample t m, PostBuild t m, MonadFix m, MonadHold t m) => Dynamic t Settings -> m (Event t (Settings -> Settings))
 settingsPanel settingsDyn = do
