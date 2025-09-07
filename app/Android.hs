@@ -273,7 +273,7 @@ main = do
              b' <- delay 1 b
              barcodeWidget b' login
 
-          booksDyn <- el "table" $ do
+          booksDyn <- elAttr "table" ("class" =: "books") $ do
             -- TODO: the complete block is rebuilt if anything changes, but
             -- that's fine. Maybe later we could introduce finer grained
             -- updates, for example, based on barcode
@@ -323,6 +323,9 @@ displayBook pushLog userM book today = do
     elAttr "td" (
       "class" =: colorClass
       ) $ text $ tshow remainingDays <> " days"
+    el "td" $ text $ Text.take 1 (case userM of
+       Just user -> displayName user
+       Nothing -> "")
     el "td" $ mdo
       showE <- nerdFontButton "nf-fa-image"
 

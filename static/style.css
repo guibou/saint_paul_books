@@ -15,12 +15,12 @@
     color: goldenrod
 }
 
-.books table td * {
+.books td * {
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
 }
 
-.books table {
+.books {
     width: 100%
 }
