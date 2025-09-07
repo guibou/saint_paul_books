@@ -50,6 +50,10 @@
           type = "app";
           program = "${self.packages.x86_64-linux.default}/bin/st-paul-books";
         };
+        deploy = {
+          type = "app";
+          program = "${self.packages.x86_64-linux.ui.android.st-paul-books}/bin/deploy";
+        };
       };
 
       packages.x86_64-linux = {
