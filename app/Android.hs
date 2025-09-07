@@ -114,6 +114,8 @@ clickDiv innerWidget = do
 data Visibility = BooksVisibility | SettingsVisibility | CardsVisibility
   deriving (Eq, Show)
 
+pattern RefreshThreshold = 3600 -- auto refresh after one hour
+
 logWithTime :: (Text -> IO ()) -> Text -> IO ()
 logWithTime pushLog message = do
   time <- getCurrentTime
@@ -191,10 +193,13 @@ main = do
                           text $ tshow total <> "/" <> tshow capacity
                           text " Refreshed: "
 
-                          dyn_ (currentClock <&> \now -> do
-                            let iguanaAge = now `diffUTCTime` oldest_update
-                            text $ niceAge iguanaAge
-                            )
+                          let niceAgeDyn = fromUniqDynamic $ uniqDynamic $ (currentClock <&> \now -> do
+                                let iguanaAge = now `diffUTCTime` oldest_update
+                                niceAge iguanaAge
+                                )
+
+                          dynText niceAgeDyn
+
                       | any isError refreshingState -> text $ "Error when refreshing, see logs"
                       | otherwise -> do
                           elAttr
@@ -212,7 +217,7 @@ main = do
       changeVisibilityE <- switchHold never (snd <$> headerE)
       changeVisibility <- foldDyn const BooksVisibility changeVisibilityE
 
-      let today = utctDay <$> currentClock
+      let today = fromUniqDynamic $ uniqDynamic $ utctDay <$> currentClock
 
       -- Listing widget
       let allBooks = join $ fmap distributeListOverDyn $ (map (view _2) . Map.elems) <$> allBooks'
@@ -233,10 +238,17 @@ main = do
         initBooks <- sample $ current webStorageBooks
         booksDyn <- foldDyn (\new _old -> new) initBooks updateBooks
 
+        let latestRefresh = fst <$> booksDyn
+        let shouldAutoRefresh = attachWith (\(latestRefresth, status) now ->
+                         now `diffUTCTime` latestRefresth > RefreshThreshold && status /= Refreshing)
+                           ((,) <$> current latestRefresh <*> current refreshStatus) (updated currentClock)
+        let autoRefreshEvent = ffilter (\v -> v) $ shouldAutoRefresh
+
         let refreshEvent =
               leftmost
                 [ updated userDyn,
-                  tag (current userDyn) refreshnerdFontButtonE
+                  tag (current userDyn) refreshnerdFontButtonE,
+                  tag (current userDyn) autoRefreshEvent
                 ]
         (fanEither -> (updateError, updateBooks)) <- refreshBook (logWithTime pushLog) refreshEvent
 
