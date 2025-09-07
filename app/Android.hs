@@ -107,6 +107,7 @@ nerdFontButton nfClass = do
   (event, _) <- el' "span" $ nerdFontItem nfClass
   pure $ domEvent Click event
 
+clickDiv :: DomBuilder t m => m b -> m (Event t ())
 clickDiv innerWidget = do
   (event, _) <- el' "div" $ innerWidget
   pure $ domEvent Click event
@@ -114,6 +115,7 @@ clickDiv innerWidget = do
 data Visibility = BooksVisibility | SettingsVisibility | CardsVisibility
   deriving (Eq, Show)
 
+pattern RefreshThreshold :: (Eq a, Num a) => a
 pattern RefreshThreshold = 3600 -- auto refresh after one hour
 
 logWithTime :: (Text -> IO ()) -> Text -> IO ()
@@ -312,6 +314,7 @@ main = do
         pure updateSettings
       pure ()
 
+taggedAsSelected :: (DomBuilder t m, PostBuild t m, Eq a) => Dynamic t a -> a -> m b -> m b
 taggedAsSelected currentVisibilty targetedVisibility widget = elDynAttr "div" (currentVisibilty <&> \v -> if v == targetedVisibility then "class" =: "current" else mempty) $ widget
 
 elDivVisible :: (DomBuilder t m, PostBuild t m) => Dynamic t Visibility -> Visibility -> m a -> m a
@@ -343,7 +346,12 @@ displayBook pushLog user book today = do
         el "div" $ text $ "full title:" <> fullTitle book
 
         renewE <- button "Renew"
-        renewBookAsync pushLog (renewE $> (book, user))
+        -- TODO: work on the renewal result
+        res <- renewBookAsync pushLog (renewE $> (book, user))
+        performEvent_ $ res <&> (\resM -> liftIO $ do
+          case resM of
+            Left err -> pushLog (tshow err)
+            Right _ -> pure ())
 
         pure $ closeE
       pure ()
