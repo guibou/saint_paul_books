@@ -50,7 +50,7 @@ import Control.Lens ((^.))
 pattern CapacityPerUser :: Int
 pattern CapacityPerUser = 10
 
-pattern LoanMaxDays :: Int
+pattern LoanMaxDays :: (Eq t, Num t) => t
 pattern LoanMaxDays = 28
 
 pattern DefaultCapacityThreshold :: Int
@@ -205,10 +205,11 @@ main = do
       let visibleDiv = elDivVisible changeVisibility
 
       visibleDiv BooksVisibility $ do
-        _ <- listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn dueDate) <$> allBooksInOneList) $ \_idx bookDyn -> do
-          dyn_ ((\book -> displayBook pushLog Nothing book today settingsDyn) <$> bookDyn)
+        elAttr "table" ("class" =: "books") $ do
+          _ <- listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn dueDate) <$> allBooksInOneList) $ \_idx bookDyn -> do
+            dyn_ ((\book -> displayBook pushLog Nothing book today) <$> bookDyn)
+            pure ()
           pure ()
-        pure ()
 
       allBooks' <- visibleDiv CardsVisibility $ listWithKey (fmap (Map.fromList . map (\u -> (login (credential u), u))) credentialsUniqDyn) $ \login userDyn -> mdo
         webStorageBooks <- webStorageDyn ("book" <> login) (now, []) (updated booksDyn)
@@ -279,7 +280,7 @@ main = do
             void $ simpleList (snd <$> booksDyn) $ \bookDyn ->
               dyn $
                 ((,) <$> bookDyn <*> userDyn) <&> \(book, user) ->
-                  displayBook pushLog (Just user) book today settingsDyn
+                  displayBook pushLog (Just user) book today
             pure $ booksDyn
 
           pure (refreshStatus, booksDyn)
@@ -305,8 +306,8 @@ elDivVisible currentVisibleDyn name content = do
 
   elDynAttr "div" (toVisibility <$> currentVisibleDyn) content
 
-displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> Maybe User -> Book -> Day -> Dynamic t Settings -> m ()
-displayBook pushLog userM book today settingsDyn = do
+displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> Maybe User -> Book -> Day -> m ()
+displayBook pushLog userM book today = do
   el "tr" $ do
     let remainingDays = diffDays (dueDate book) today
     let elapsedDays = LoanMaxDays - fromIntegral remainingDays
@@ -315,20 +316,13 @@ displayBook pushLog userM book today settingsDyn = do
       let click = domEvent Click e
       set <- foldDyn (\_ v -> not v) False click
       pure ()
-    el "td" $ text $ tshow remainingDays <> " days"
-    el "td"
-      $ elDynAttr
-        "meter"
-        ( settingsDyn
-            <&> \Settings {..} ->
-              [ ("min", "0"),
-                ("max", tshow LoanMaxDays),
-                ("low", tshow loanDayThreshold),
-                ("value", tshow remainingDays)
-              ]
-        )
-      $ text
-      $ tshow elapsedDays <> " / " <> tshow LoanMaxDays
+    let colorClass
+          | remainingDays > LoanMaxDays `div` 2 = "" :: Text
+          | remainingDays > 3 = "late-ok"
+          | otherwise = "late-critical"
+    elAttr "td" (
+      "class" =: colorClass
+      ) $ text $ tshow remainingDays <> " days"
     el "td" $ mdo
       showE <- nerdFontButton "nf-fa-image"
 

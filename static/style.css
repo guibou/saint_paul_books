@@ -6,3 +6,21 @@
     left: 0px;
     background: white;
 }
+
+.late-critical {
+    color: red
+}
+
+.late-ok {
+    color: goldenrod
+}
+
+.books table td * {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.books table {
+    width: 100%
+}
