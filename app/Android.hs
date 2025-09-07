@@ -121,8 +121,6 @@ main :: IO ()
 main = do
   mainWidgetWithHead headWidget $
     mdo
-      elAttr "script" ("src" =: "https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js") $ pure ()
-
       (eventLog, pushLog) <- newTriggerEvent
       webStorageSettings <- webStorageDyn "settings" defaultSettings (updated settingsDyn)
       initSetting <- sample $ current webStorageSettings
