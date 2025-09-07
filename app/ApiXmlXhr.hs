@@ -77,7 +77,7 @@ refreshBooksCallback pushLog user callback = do
 
 {-# NOINLINE sessionVar #-}
 sessionVar :: TVar SessionStatus
-sessionVar = unsafePerformIO $ newTVarIO (AvailableSession $ IguanaSession mempty mempty)
+sessionVar = unsafePerformIO $ newTVarIO NoSession
 
 authsVar :: TVar (Map Credential Auth)
 authsVar = unsafePerformIO $ newTVarIO mempty
