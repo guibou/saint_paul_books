@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Books where
 
@@ -20,7 +21,8 @@ data Book = Book
     dueDate :: Day,
     author :: Text,
     cover :: Text,
-    barcode :: Text
+    barcode :: Text,
+    originalPayload :: Value
   }
   deriving (Show, Generic, Eq, ToJSON, FromJSON)
 
@@ -39,6 +41,7 @@ bookFromJSON = withObject "Book" $ \o -> do
   cover <- cleanImage <$> (o .: "image")
   fullTitle <- o .: "title"
   barcode <- o .: "barcode"
+  let originalPayload = Object o
   pure $ Book {..}
 
 cleanDate :: (MonadFail m) => String -> m Day

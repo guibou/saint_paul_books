@@ -18,11 +18,11 @@ import Data.Coerce (coerce)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Time
-import Reflex.Dom
 import GHC.IO (unsafePerformIO)
 import Control.Concurrent.STM
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Reflex.Dom.Core
 
 -- TODO: here all the semantic is copy/pasted between the different action, and
 -- the login phase is redone everytime, which maybe not optimal

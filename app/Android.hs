@@ -41,11 +41,12 @@ import qualified Data.Text.Encoding as TE
 import Data.Text.Read (decimal)
 import Data.Time
 import GHC.Generics
-import Reflex.Dom
+import Reflex.Dom.Core
 import Webstorage (webStorageDyn)
 import Language.Javascript.JSaddle (liftJSM)
 import Language.Javascript.JSaddle.Object
 import Control.Lens ((^.), view, _2, _1, _4)
+import Language.Javascript.JSaddle.Warp (run)
 
 pattern CapacityPerUser :: Int
 pattern CapacityPerUser = 10
@@ -130,7 +131,7 @@ headWidget = do
 
 main :: IO ()
 main = do
-  mainWidgetWithHead headWidget $
+  run 8080 $ mainWidgetWithHead headWidget $
     mdo
       pb <- getPostBuild
       now <- liftIO $ getCurrentTime
