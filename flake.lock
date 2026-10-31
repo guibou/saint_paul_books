@@ -2,11 +2,11 @@
   "nodes": {
     "nixpkgs": {
       "locked": {
-        "lastModified": 1789823240,
-        "narHash": "sha256-w+AdhRCQLgsqVlQDa1HLclgZ6t/w99mJGa6zRXt9+rY=",
+        "lastModified": 1737223978,
+        "narHash": "sha256-5r5py5/ckGE7EzQk0uwOyeDus4xowRPmFrAhSNrb51g=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "488bcd74e6e6c9434146d443381f2d396248dc85",
+        "rev": "d37c24666dc05cdf1e9b76ea4437e3f222c7f944",
         "type": "github"
       },
       "original": {
@@ -18,11 +18,11 @@
     "reflex-platform": {
       "flake": false,
       "locked": {
-        "lastModified": 1765987711,
-        "narHash": "sha256-rBUekztvGKGMCwebHGN1duaKrp/5uxICnoYaBZDC4Kc=",
+        "lastModified": 1732366171,
+        "narHash": "sha256-NvpYRNfVmS0uxkEAuS7t2iul4NGQjBVZxFoYCn08yu4=",
         "owner": "reflex-frp",
         "repo": "reflex-platform",
-        "rev": "a2c3455a210b3069f448a694bbd2780407d8692b",
+        "rev": "2e0d31bc1b565eed02a3848cde0e0dbc4f33a2d4",
         "type": "github"
       },
       "original": {
