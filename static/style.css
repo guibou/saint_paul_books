@@ -29,27 +29,31 @@
     width: 100%
 }
 
-.header {
-    position: relative;
-}
-
-.menu {
-    position:absolute;
-    text-align: left;
-    left:0px;
-    top:1.5em;
-    z-index: 2;
-}
-
 .menu nf {
     font-size: 1.2em;
 }
 
+
 .menu div {
   font-size: 1.2em;
   background: white;
+
+  display: flex;
+  justify-content: space-around;
 }
 
-.current {
-    font-weight: bold
+#cards:not(:target) {
+    display: none;
 }
+
+#settings:not(:target) {
+    display: none;
+}
+
+#cards:target ~ #books {
+   display: none;
+   }
+
+#settings:target ~ #books {
+   display: none;
+   }

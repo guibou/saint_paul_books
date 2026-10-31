@@ -16,7 +16,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Main where
+module Main (main) where
 
 import Api
 import ApiXmlXhr (refreshBook, renewBookAsync)
@@ -53,12 +53,6 @@ pattern CapacityPerUser = 10
 
 pattern LoanMaxDays :: (Eq t, Num t) => t
 pattern LoanMaxDays = 28
-
-pattern DefaultCapacityThreshold :: Int
-pattern DefaultCapacityThreshold = 8
-
-pattern DefaultLowRemainingDays :: Int
-pattern DefaultLowRemainingDays = 5
 
 tshow :: (Show t) => t -> Text
 tshow = Text.pack . show
@@ -108,11 +102,6 @@ nerdFontButton nfClass = do
   (event, _) <- el' "span" $ nerdFontItem nfClass
   pure $ domEvent Click event
 
-clickDiv :: DomBuilder t m => m b -> m (Event t ())
-clickDiv innerWidget = do
-  (event, _) <- el' "div" $ innerWidget
-  pure $ domEvent Click event
-
 data Visibility = BooksVisibility | SettingsVisibility | CardsVisibility
   deriving (Eq, Show)
 
@@ -131,7 +120,7 @@ headWidget = do
 
 main :: IO ()
 main = do
-  run 8080 $ mainWidgetWithHead headWidget $
+  run 8081 $ mainWidgetWithHead headWidget $
     mdo
       pb <- getPostBuild
       now <- liftIO $ getCurrentTime
@@ -152,32 +141,18 @@ main = do
       headerE <- el "div" $ do
         dyn $ flip fmap allBooks $ \books -> do
           elAttr "div" ("class" =: "header") $ do
-            openMenuE <- nerdFontButton "nf-fa-bars"
             event <- elAttr "div" ("class" =: "menu") $ mdo
-
-              menuVisibility <- foldDyn (\f v -> f v) False $ leftmost
-                [(not <$ openMenuE),
-                  (const False <$ refresh),
-                  (const False <$ navigate)
-                ]
-              es@(refresh, navigate) <- elDynAttr "div" (menuVisibility <&> \visibility ->
-                 if visibility then mempty else ("style" =: "display:none"))$ do
-                booksE <- clickDiv $ taggedAsSelected changeVisibility BooksVisibility $ 
-                  nerdFontButton "nf-cod-book" <* text "Livres"
-                cardsE <- clickDiv $ taggedAsSelected changeVisibility CardsVisibility $ 
-                  nerdFontButton "nf-fa-id_card" <* text "Cartes"
-                refreshE <- clickDiv $ do
-                  nerdFontButton "nf-md-reload" <* text "Reload"
-                settingsE <- clickDiv $ taggedAsSelected changeVisibility SettingsVisibility $ 
-                  nerdFontButton "nf-cod-settings_gear" <* text "Settings"
+              es <- el "div" $ do
+                elAttr "a" ("href" =: "#books") $ nerdFontItem "nf-cod-book" <* text "Livres"
+                elAttr "a" ("href" =: "#cards") $ nerdFontItem "nf-fa-id_card" <* text "Cartes"
+                elAttr "a" ("href" =: "#settings") $ nerdFontItem "nf-cod-settings_gear" <* text "Settings"
+                refreshE <- do
+                  (event, _) <- el' "span" $ do
+                    nerdFontItem "nf-md-reload"
+                    text "Reload"
+                  pure $ domEvent Click event
                 pure
-                  ( refreshE,
-                    leftmost
-                      [ BooksVisibility <$ booksE,
-                        SettingsVisibility <$ settingsE,
-                        CardsVisibility <$ cardsE
-                      ]
-                  )
+                  refreshE
               pure es
 
             case books of
@@ -216,9 +191,7 @@ main = do
                           text "/"
                           text $ tshow $ length refreshingState
             pure event
-      refreshnerdFontButtonE <- switchHold never (fst <$> headerE)
-      changeVisibilityE <- switchHold never (snd <$> headerE)
-      changeVisibility <- foldDyn const BooksVisibility changeVisibilityE
+      refreshnerdFontButtonE <- switchHold never headerE
 
       let today = fromUniqDynamic $ uniqDynamic $ utctDay <$> currentClock
 
@@ -227,16 +200,7 @@ main = do
       let chevalBooks = join $ fmap distributeListOverDyn $ (fmap (\(a, b, c) -> (,,) <$> a <*> b <*> c) . Map.elems) <$> allBooks'
       let chevalBooks1 = concatMap (\(rs, (t, books), user) -> (rs, t, user, ) <$> books) <$> chevalBooks
 
-      let visibleDiv = elDivVisible changeVisibility
-
-      visibleDiv BooksVisibility $ do
-        elAttr "table" ("class" =: "books") $ do
-          _ <- listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn (dueDate . view _4)) <$> chevalBooks1) $ \_idx d -> do
-            dyn_ ((\(_, _, user, book) -> displayBook pushLog user book today) <$> d)
-            pure ()
-          pure ()
-
-      allBooks' <- visibleDiv CardsVisibility $ listWithKey (fmap (Map.fromList . map (\u -> (login (credential u), u))) credentialsUniqDyn) $ \login userDyn -> mdo
+      allBooks' <- elAttr "div" ("id" =: "cards") $ listWithKey (fmap (Map.fromList . map (\u -> (login (credential u), u))) credentialsUniqDyn) $ \login userDyn -> mdo
         webStorageBooks <- webStorageDyn ("book" <> login) (now, []) (updated booksDyn)
         initBooks <- sample $ current webStorageBooks
         booksDyn <- foldDyn (\new _old -> new) initBooks updateBooks
@@ -305,7 +269,7 @@ main = do
 
       -- Settings
       --
-      updateSettings <- visibleDiv SettingsVisibility $ do
+      updateSettings <- elAttr "div" ("id" =: "settings") $ do
         updateSettings <- settingsPanel settingsDyn
         el "details" $ do
           el "summary" $ text "logs"
@@ -313,19 +277,15 @@ main = do
           logDyn <- foldDyn (\x l -> take 100 $ x : l) [] eventLog
           el "pre" $ dynText (Text.unlines <$> logDyn)
         pure updateSettings
+
+
+      elAttr "table" ("class" =: "books" <> "id" =: "books") $ do
+          _ <- listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn (dueDate . view _4)) <$> chevalBooks1) $ \_idx d -> do
+            dyn_ ((\(_, _, user, book) -> displayBook pushLog user book today) <$> d)
+            pure ()
+          pure ()
+
       pure ()
-
-taggedAsSelected :: (DomBuilder t m, PostBuild t m, Eq a) => Dynamic t a -> a -> m b -> m b
-taggedAsSelected currentVisibilty targetedVisibility widget = elDynAttr "div" (currentVisibilty <&> \v -> if v == targetedVisibility then "class" =: "current" else mempty) $ widget
-
-elDivVisible :: (DomBuilder t m, PostBuild t m) => Dynamic t Visibility -> Visibility -> m a -> m a
-elDivVisible currentVisibleDyn name content = do
-  let toVisibility :: Visibility -> Map.Map Text Text
-      toVisibility current
-        | current == name = ("style" =: "display: block")
-        | otherwise = ("style" =: "display: none")
-
-  elDynAttr "div" (toVisibility <$> currentVisibleDyn) content
 
 displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> User -> Book -> Dynamic t Day -> m ()
 displayBook pushLog user book today = do
