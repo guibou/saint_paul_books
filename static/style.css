@@ -57,3 +57,12 @@
 #settings:target ~ #books {
    display: none;
    }
+
+#status {
+    display: flex;
+    justify-content: space-between;
+}
+
+#status div {
+    display: flex-item;
+}

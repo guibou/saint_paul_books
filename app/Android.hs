@@ -158,38 +158,42 @@ main = do
             case books of
               [] -> text "No user, add them in the Setting panel"; 
               _ -> do
-                dyn_ $
-                  globalRefreshingStates <&> \refreshingState ->
-                    if
-                      | all (== Idle) refreshingState -> do
+                elAttr "div" ("id" =: "status") $ do
                           let oldest_update = minimum (map fst books)
 
                           let total = sum $ map (\(_mtime, items) -> length @[] items) books
                               capacity = length books * CapacityPerUser
 
-                          text "Capacity: "
-                          text $ tshow total <> "/" <> tshow capacity
-                          text " Refreshed: "
+                          el "div" $ do
+                            text "Capacity: "
+                            text $ tshow total <> "/" <> tshow capacity
+                          dyn_ $
+                             globalRefreshingStates <&> \refreshingState ->
+                               if
+                                 | all (== Idle) refreshingState -> do
+                                    el "div" $ do
+                                       text " Refreshed: "
 
-                          let niceAgeDyn = fromUniqDynamic $ uniqDynamic $ (currentClock <&> \now -> do
-                                let iguanaAge = now `diffUTCTime` oldest_update
-                                niceAge iguanaAge
-                                )
+                                       let niceAgeDyn = fromUniqDynamic $ uniqDynamic $ (currentClock <&> \now -> do
+                                             let iguanaAge = now `diffUTCTime` oldest_update
+                                             niceAge iguanaAge
+                                             )
 
-                          dynText niceAgeDyn
+                                       dynText niceAgeDyn
 
-                      | any isError refreshingState -> text $ "Error when refreshing, see logs"
-                      | otherwise -> do
-                          elAttr
-                            "progress"
-                            []
-                            $ text
-                              ""
-                          let nb_done = length $ filter (== Idle) refreshingState
-                          text "Refreshing"
-                          text $ tshow $ nb_done
-                          text "/"
-                          text $ tshow $ length refreshingState
+                                 | any isError refreshingState -> text $ "Error when refreshing, see logs"
+                                 | otherwise -> do
+                                     el "div" $ elAttr
+                                       "progress"
+                                       []
+                                       $ text
+                                         ""
+                                     let nb_done = length $ filter (== Idle) refreshingState
+                                     el "div" $ do
+                                       text "Refreshing:"
+                                       text $ tshow $ nb_done
+                                       text " / "
+                                       text $ tshow $ length refreshingState
             pure event
       refreshnerdFontButtonE <- switchHold never headerE
 
