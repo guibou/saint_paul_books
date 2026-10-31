@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module ApiRequest where
 
@@ -15,6 +16,7 @@ import GHC.Generics
 import Network.Connection (TLSSettings (..))
 import Network.HTTP.Client.TLS (mkManagerSettings, newTlsManagerWith)
 import Network.HTTP.Req
+import Data.Time (Day)
 
 newHttpConfig :: IO HttpConfig
 newHttpConfig = do
@@ -98,12 +100,22 @@ data RenewResponse = RenewResponse
   { -- book barcode, useful as an entrypoint
     barcode :: Text,
     -- The new due date. The book could be updated
-    dueDate :: Text,
+    dueDate :: Day,
     refusalReason :: Text,
-    -- 0 or 1, based on the success
-    success :: Int
+    success :: Bool
   }
-  deriving (Show, Generic, FromJSON)
+  deriving (Show, Generic)
+
+instance FromJSON RenewResponse where
+  parseJSON = withObject "RenewResponse" $ \o -> do
+    refusalReason <- o .: "refusalReason"
+    dueDate <- cleanDate =<< o .: "dueDate"
+    barcode <- o .: "barcode"
+    successInt <- o .: "success"
+    let success = case successInt of
+           (1 :: Int) -> True
+           _ -> False
+    pure $ RenewResponse {..}
 
 data Results x = Results {results :: x}
   deriving (Show, Generic, FromJSON)

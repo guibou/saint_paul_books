@@ -84,6 +84,9 @@ niceAge (truncate -> age)
   | age < (3600 * 24) = tshow (age `div` 3600) <> " hours ago"
   | otherwise = tshow (age `div` (3600 * 24)) <> " days ago"
 
+data RenewStatus = Renewing | RenewIdle | RenewError Text
+  deriving (Show, Eq)
+
 data RefreshStatus = Refreshing | Idle | RefreshError Text
   deriving (Show, Eq)
 
@@ -194,6 +197,16 @@ main = do
                                        text $ tshow $ nb_done
                                        text " / "
                                        text $ tshow $ length refreshingState
+                elAttr "div" ("id" =: "renewStatus") $ do
+                 dyn_ $ renewStatus <&> \status -> do
+                   case status of
+                     RenewIdle -> pure ()
+                     Renewing -> do 
+                                     text "Renewing: "
+                                     elAttr "progress" [] $ text ""
+                     RenewError t -> do
+                       text t
+                   pure ()
             pure event
       refreshnerdFontButtonE <- switchHold never headerE
 
@@ -207,7 +220,29 @@ main = do
       allBooks' <- elAttr "div" ("id" =: "cards") $ listWithKey (fmap (Map.fromList . map (\u -> (login (credential u), u))) credentialsUniqDyn) $ \login userDyn -> mdo
         webStorageBooks <- webStorageDyn ("book" <> login) (now, []) (updated booksDyn)
         initBooks <- sample $ current webStorageBooks
-        booksDyn <- foldDyn (\new _old -> new) initBooks updateBooks
+        booksDyn <- foldDyn (\new _old -> new) initBooks (
+          leftmost [updateBooks, renewBook])
+
+        let renewBook = attachWithMaybe f (current booksDyn) renewRes
+            f (t, books) renewedBookM = do
+               case renewedBookM of
+                 Left _ -> Nothing
+                 Right (newBook) -> do
+                   let bookMap = Map.fromList $ do
+                          b <- books
+                          pure (barcode b, b)
+
+                   -- This is ugly... I'm on the logic for one user, but the
+                   -- event is for multiple users, so I'm checking that the
+                   -- refreshed book is part of the list of known books for
+                   -- this user...
+                   case Map.lookup (barcode newBook) bookMap of
+                     Nothing -> Nothing
+                     Just _ -> do
+                       let 
+                         newMap = Map.insert (barcode newBook) newBook bookMap
+                       Just (t, Map.elems newMap)
+
 
         let latestRefresh = fst <$> booksDyn
         let shouldAutoRefresh = attachWith (\(latestRefresth, status) now ->
@@ -266,7 +301,7 @@ main = do
             void $ simpleList (snd <$> booksDyn) $ \bookDyn ->
               dyn $
                 ((,) <$> bookDyn <*> userDyn) <&> \(book, user) ->
-                  displayBook pushLog user book today
+                  displayBook user book today
             pure $ booksDyn
 
           pure (refreshStatus, booksDyn, userDyn)
@@ -282,44 +317,63 @@ main = do
           el "pre" $ dynText (Text.unlines <$> logDyn)
         pure updateSettings
 
+      -- Book details
+      renewE' <- elAttr "div" ("class" =: "details" <> "id" =: "details") $ do
+        dyn $ currentBookM <&> \case
+          Nothing -> pure never
+          Just (book, user) -> do
+            elAttr "img" ("src" =: cover book) $ pure ()
+            el "div" $ text $ "author:" <> author book
+            el "div" $ text $ "full title:" <> fullTitle book
 
-      elAttr "table" ("class" =: "books" <> "id" =: "books") $ do
-          _ <- listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn (dueDate . view _4)) <$> chevalBooks1) $ \_idx d -> do
-            dyn_ ((\(_, _, user, book) -> displayBook pushLog user book today) <$> d)
-            pure ()
-          pure ()
+            renewE <- button "Renew"
+            pure (renewE $> (book, user))
+      renewE <- switchHold never renewE'
+
+      renewStatus <-
+          foldDyn (\new _old -> new) RenewIdle $
+            leftmost
+              [ renewE
+                  $> Renewing,
+                renewRes <&> \case
+                   Left t -> RenewError t
+                   Right _ -> RenewIdle
+              ]
+
+      renewRes <- renewBookAsync pushLog renewE
+
+      performEvent_ $ renewRes <&> (\resM -> liftIO $ do
+              case resM of
+                Left err -> pushLog (tshow err)
+                Right _ -> pure ())
+      pure ()
+
+
+      res <- elAttr "table" ("class" =: "books" <> "id" =: "books") $ do
+          listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn (dueDate . view _4)) <$> chevalBooks1) $ \_idx d -> do
+            dyn ((\(_, _, user, book) -> displayBook user book today) <$> d)
+
+      let res' = (leftmost . Map.elems) <$> updated res
+      res'' <- switchHold never res'
+      res''' <- switchHold never res''
+
+      currentBookM <- foldDyn (\new _old -> Just new) Nothing res'''
 
       pure ()
 
-displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> User -> Book -> Dynamic t Day -> m ()
-displayBook pushLog user book today = do
+displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => User -> Book -> Dynamic t Day -> m _
+displayBook user book today = do
   el "tr" $ do
     let remainingDays = diffDays (dueDate book) <$> today
     let colorClass remainingDays
           | remainingDays > LoanMaxDays `div` 2 = "" :: Text
           | remainingDays > 3 = "late-ok"
           | otherwise = "late-critical"
-    el "td" $ mdo
-      showE <- nerdFontButton "nf-fa-image"
+    selectedBook <- el "td" $ mdo
+      (e, _) <- elAttr' "a" ("href" =: ("#details")) $ nerdFontItem "nf-fa-image"
+      
+      pure (domEvent Click e $> (book, user))
 
-      visibleDyn <- foldDyn (\f x -> f x) False $ leftmost [not <$ showE, const False <$ closeE]
-
-      closeE <- elDynAttr "el" (visibleDyn <&> \visible -> "class" =: "details" <> "style" =: if visible then "display: block" else "display: none") $ do
-        closeE <- elAttr "div" ("class" =: "close") $ nerdFontButton "nf-md-close_circle"
-        elAttr "img" ("src" =: cover book) $ pure ()
-        el "div" $ text $ "author:" <> author book
-        el "div" $ text $ "full title:" <> fullTitle book
-
-        renewE <- button "Renew"
-        -- TODO: work on the renewal result
-        res <- renewBookAsync pushLog (renewE $> (book, user))
-        performEvent_ $ res <&> (\resM -> liftIO $ do
-          case resM of
-            Left err -> pushLog (tshow err)
-            Right _ -> pure ())
-
-        pure $ closeE
-      pure ()
     el "td" $ text $ Text.take 1 (displayName user)
     elDynAttr "td" (("class" =:) . colorClass <$> remainingDays) $ dynText $ (( \remainingDays -> tshow remainingDays <> "d") <$> remainingDays)
     el "td" $ mdo
@@ -327,7 +381,7 @@ displayBook pushLog user book today = do
       let click = domEvent Click e
       set <- foldDyn (\_ v -> not v) False click
       pure ()
-    pure ()
+    pure selectedBook
 
 settingsPanel :: (DomBuilder t m, MonadSample t m, PostBuild t m, MonadFix m, MonadHold t m) => Dynamic t Settings -> m (Event t (Settings -> Settings))
 settingsPanel settingsDyn = do

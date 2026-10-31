@@ -3,6 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module ApiXmlXhr where
 
@@ -30,10 +31,10 @@ import Reflex.Dom.Core
 refreshBook :: (TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> Event t User -> m (Event t (Either Text (UTCTime, [Book])))
 refreshBook pushLog userEvent = performEventAsync $ (refreshBooksCallback pushLog) <$> userEvent
 
-renewBookAsync :: (TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> Event t (Book, User) -> m (Event t (Either Text (UTCTime, [Book])))
+renewBookAsync :: (TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> Event t (Book, User) -> m (Event t (Either Text Book))
 renewBookAsync pushLog bookEvent = performEventAsync $ (renewBookCallback pushLog) <$> bookEvent
 
-renewBookCallback :: (MonadIO m) => (Text -> IO ()) -> (Book, User) -> (Either Text (UTCTime, [Book]) -> IO a) -> m ()
+renewBookCallback :: (MonadIO m) => (Text -> IO ()) -> (Book, User) -> (Either Text Book -> IO a) -> m ()
 renewBookCallback pushLog (book, user) callback = do
   let logWithName t = pushLog (displayName user <> ": " <> t)
   void $ liftIO $ async $ do
@@ -137,7 +138,7 @@ refreshBooks pushLog User {..} = do
         pure $ Right (mtime, coerce books)
       Left err -> pure (Left $ Text.pack err)
 
-renewBook :: (Text -> IO ()) -> (Book, User) -> IO (Either Text (UTCTime, [Book]))
+renewBook :: (Text -> IO ()) -> (Book, User) -> IO (Either Text Book)
 renewBook pushLog (book, User {..}) = do
   let logSection section action = do
         let start = do
@@ -154,5 +155,7 @@ renewBook pushLog (book, User {..}) = do
     auth <- logSection "getLogin" $ getLogin session credential
     res <- logSection "refreshLoan" $ refreshLoan auth book
     pushLog $ Text.pack $ show res
-    -- TODO
-    pure $ Left "toto"
+    case res of
+      [RenewResponse{success = False, refusalReason}] -> pure (Left refusalReason)
+      [RenewResponse{success = True, dueDate=newDueDate}] -> pure (Right (let Book{..} = book in Book{dueDate=newDueDate, ..}))
+      _ -> pure (Left "Unknown error, see log")
