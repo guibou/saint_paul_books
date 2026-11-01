@@ -41,12 +41,13 @@ import qualified Data.Text.Encoding as TE
 import Data.Text.Read (decimal)
 import Data.Time
 import GHC.Generics
-import Reflex.Dom
+import Reflex.Dom.Core
 import Webstorage (webStorageDyn)
 import Language.Javascript.JSaddle (liftJSM)
 import Language.Javascript.JSaddle.Object
 import Control.Lens ((^.), view, _2, _1, _4)
 -- import Language.Javascript.JSaddle.Warp (run)
+import Language.Javascript.JSaddle.Warp
 
 pattern CapacityPerUser :: Int
 pattern CapacityPerUser = 10
@@ -124,7 +125,10 @@ headWidget = do
   elAttr "style" ("type" =: "text/css") $ text $ TE.decodeUtf8 css
 
 main :: IO ()
-main = do
+main = run 8085 widget
+
+widget :: _
+widget = do
   -- run 8081 $ 
   mainWidgetWithHead headWidget $
     mdo

@@ -3,30 +3,39 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 module ApiXmlXhr where
 
-import Api
-import ApiRequest
+import Api hiding (iguana_root)
+-- import ApiRequest
 import Books
 import Control.Concurrent.Async (async)
 import Control.Exception
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson
+import Data.ByteString.Char8 (toStrict)
 import Data.Coerce (coerce)
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import Data.Time
+import Debug.Trace (traceShow, traceShowId)
+import Language.Javascript.JSaddle (MonadJSM)
 import GHC.IO (unsafePerformIO)
 import Control.Concurrent.STM
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Reflex.Dom.Core
 
--- TODO: here all the semantic is copy/pasted between the different action, and
--- the login phase is redone everytime, which maybe not optimal
+refreshBook :: (TriggerEvent t m, PerformEvent t m, MonadIO (Performable m), MonadJSM (Performable m)) => Event t User -> m (Event t (Either Text (UTCTime, [Book])))
+refreshBook userEvent = do
+  iguanaSessionE <- getIguanaSession' userEvent
+  let e' = traceEvent "iguanaSession" iguanaSessionE
+  performEvent (pure () <$ e')
+  performEventAsync $ refreshBooksCallback <$> userEvent
 
 refreshBook :: (TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> Event t User -> m (Event t (Either Text (UTCTime, [Book])))
 refreshBook pushLog userEvent = performEventAsync $ (refreshBooksCallback pushLog) <$> userEvent
@@ -159,3 +168,27 @@ renewBook pushLog (book, User {..}) = do
       [RenewResponse{success = False, refusalReason}] -> pure (Left refusalReason)
       [RenewResponse{success = True, dueDate=newDueDate}] -> pure (Right (let Book{..} = book in Book{dueDate=newDueDate, ..}))
       _ -> pure (Left "Unknown error, see log")
+-}
+
+getIguanaSession' event = do
+  -- TODO: why is this POST?
+  let request = XhrRequest "POST" (iguana_root <> "/Rest.Server.cls") (def {_xhrRequestConfig_withCredentials = False})
+  response <- performRequestAsync (request <$ event)
+  pure $ _xhrResponse_responseText <$> response
+
+extractIguanaSession :: XhrResponse -> Maybe IguanaSession
+extractIguanaSession response = do
+  (traceShowId -> responseBody) <- _xhrResponse_responseText response
+  let headers = _xhrResponse_headers response
+
+  -- TODO: the extract session logic could be converted to Text
+  let iguanaSessionId = extractSessionId (encodeUtf8 responseBody)
+
+  pure $ traceShow headers $ IguanaSession {..}
+
+-- | Represents the root of the iguana library
+--
+-- In the future this could be set as an API parameter so it may query other
+-- iguana libraries
+iguana_root :: Text
+iguana_root = "https://mediatheques-saintpaul.re/iguana"
