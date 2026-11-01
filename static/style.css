@@ -29,6 +29,7 @@
 
   display: flex;
   justify-content: space-around;
+  flex-wrap: wrap;
 }
 
 #cards:not(:target) {
@@ -64,3 +65,12 @@
     display: flex-item;
 }
 
+
+.barcode-parent {
+    display: flex;
+    justify-content: center;
+}
+
+.barcode {
+    width: 70%;
+}

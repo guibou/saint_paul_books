@@ -31,7 +31,7 @@ import Data.FileEmbed
 import Data.Functor (($>), (<&>))
 import Data.List (sortOn)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Text.Encoding (encodeUtf8)
@@ -65,6 +65,7 @@ tread t = case decimal t of
 data Settings = Settings
   { capacityThreshold :: Int,
     loanDayThreshold :: Int,
+    fontSize :: Maybe Int,
     credentials :: [User]
   }
   deriving (Show, FromJSON, ToJSON, Generic)
@@ -74,6 +75,7 @@ defaultSettings =
   Settings
     { capacityThreshold = 8,
       loanDayThreshold = 5,
+      fontSize = Nothing,
       credentials = []
     }
 
@@ -125,21 +127,23 @@ main :: IO ()
 main = do
   run 8081 $ mainWidgetWithHead headWidget $
     mdo
-      pb <- getPostBuild
-      now <- liftIO $ getCurrentTime
-      tickE <- tickLossyFrom 1 now pb
-      currentClockE <- performEvent (liftIO getCurrentTime <$ tickE)
-      currentClock <- foldDyn (\now _ -> now) now currentClockE
+     pb <- getPostBuild
+     now <- liftIO $ getCurrentTime
+     tickE <- tickLossyFrom 1 now pb
+     currentClockE <- performEvent (liftIO getCurrentTime <$ tickE)
+     currentClock <- foldDyn (\now _ -> now) now currentClockE
 
-      (eventLog, pushLog) <- newTriggerEvent
-      webStorageSettings <- webStorageDyn "settings" defaultSettings (updated settingsDyn)
-      initSetting <- sample $ current webStorageSettings
-      credentialsUniqDyn <- holdUniqDyn ((credentials) <$> (settingsDyn))
+     (eventLog, pushLog) <- newTriggerEvent
+     webStorageSettings <- webStorageDyn "settings" defaultSettings (updated settingsDyn)
+     initSetting <- sample $ current webStorageSettings
+     credentialsUniqDyn <- holdUniqDyn ((credentials) <$> (settingsDyn))
 
-      settingsDyn <- foldDyn (\f x -> f x) initSetting updateSettings
+     settingsDyn <- foldDyn (\f x -> f x) initSetting updateSettings
 
+     updateSettings <- elDynAttr "div" (settingsDyn <&> \settings -> "style" =: case fontSize settings of
+                        Nothing -> ""
+                        Just pct -> "font-size: " <> tshow pct <> "%") $ mdo
       let globalRefreshingStates = join $ fmap distributeListOverDyn ((map (view _1) . Map.elems) <$> allBooks')
-
       -- Header widget
       headerE <- el "div" $ do
         dyn $ flip fmap allBooks $ \books -> do
@@ -363,7 +367,8 @@ main = do
 
       currentBookM <- foldDyn (\new _old -> Just new) Nothing res''''
 
-      pure ()
+      pure updateSettings
+     pure ()
 
 displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => User -> Book -> Dynamic t Day -> m _
 displayBook user book today = do
@@ -391,6 +396,10 @@ settingsPanel :: (DomBuilder t m, MonadSample t m, PostBuild t m, MonadFix m, Mo
 settingsPanel settingsDyn = do
   el "table" $ do
     Settings {..} <- sample $ current settingsDyn
+    fontSizeDyn <- el "tr" $ do
+      el "td" $ text "Font size (%)"
+      el "td" $ do
+        inputNumber (fromMaybe 100 fontSize)
     capacityThresholdDyn <- el "tr" $ do
       el "td" $ text "Total capacity threshold"
       el "td" $ do
@@ -423,6 +432,7 @@ settingsPanel settingsDyn = do
       leftmost
         [ (\v -> \settings -> settings {capacityThreshold = v}) <$> updated capacityThresholdDyn,
           ((\v settings -> settings {loanDayThreshold = v}) <$> updated loanDayThresholdDyn),
+          ((\v settings -> settings { fontSize = Just v}) <$> updated fontSizeDyn),
           ( ( \v settings -> case decodeStrict (encodeUtf8 v) of
                 Nothing -> settings
                 Just credentials' -> settings {credentials = credentials'}
@@ -459,6 +469,7 @@ inputNumber defaultValue = mdo
 -- | Display a barcode code128 on a event
 barcodeWidget :: _ => _ -> _ -> m ()
 barcodeWidget event value = do
+     elAttr "div" ("class" =: "barcode-parent") $ do
             elAttr "canvas" (
               "class" =: "barcode" <>
               "jsbarcode-format" =: "code128" <>
