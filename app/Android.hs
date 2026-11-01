@@ -16,16 +16,15 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Main (main) where
+module Main where
 
-import Api
-import ApiXmlXhr (refreshBook, renewBookAsync)
+import Api ()
+import ApiXmlXhr
 import Books
 import Control.Monad (join, void)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson
-import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.ByteString.Char8 (ByteString)
 import Data.FileEmbed
 import Data.Functor (($>), (<&>))
@@ -41,12 +40,13 @@ import qualified Data.Text.Encoding as TE
 import Data.Text.Read (decimal)
 import Data.Time
 import GHC.Generics
-import Reflex.Dom
+import Reflex.Dom.Core
 import Webstorage (webStorageDyn)
 import Language.Javascript.JSaddle (liftJSM)
 import Language.Javascript.JSaddle.Object
-import Control.Lens ((^.), view, _2, _1, _4)
--- import Language.Javascript.JSaddle.Warp (run)
+import Control.Lens ((^.))
+import Language.Javascript.JSaddle.Warp
+import Api
 
 pattern CapacityPerUser :: Int
 pattern CapacityPerUser = 10
@@ -66,7 +66,8 @@ data Settings = Settings
   { capacityThreshold :: Int,
     loanDayThreshold :: Int,
     fontSize :: Maybe Int,
-    credentials :: [User]
+    credentials :: [User],
+    iguanaProxy :: Text
   }
   deriving (Show, FromJSON, ToJSON, Generic)
 
@@ -76,7 +77,8 @@ defaultSettings =
     { capacityThreshold = 8,
       loanDayThreshold = 5,
       fontSize = Nothing,
-      credentials = []
+      credentials = [],
+      iguanaProxy = ""
     }
 
 niceAge :: NominalDiffTime -> Text
@@ -124,8 +126,10 @@ headWidget = do
   elAttr "style" ("type" =: "text/css") $ text $ TE.decodeUtf8 css
 
 main :: IO ()
-main = do
-  -- run 8081 $ 
+main = run 8080 widget
+
+widget :: _
+widget = do
   mainWidgetWithHead headWidget $
     mdo
      pb <- getPostBuild
@@ -144,7 +148,7 @@ main = do
      updateSettings <- elDynAttr "div" (settingsDyn <&> \settings -> "style" =: case fontSize settings of
                         Nothing -> ""
                         Just pct -> "font-size: " <> tshow pct <> "%") $ mdo
-      let globalRefreshingStates = join $ fmap distributeListOverDyn ((map (view _1) . Map.elems) <$> allBooks')
+      let globalRefreshingStates = join $ fmap distributeListOverDyn ((map (\(x, _, _) -> x) . Map.elems) <$> allBooks')
       -- Header widget
       headerE <- el "div" $ do
         dyn $ flip fmap allBooks $ \books -> do
@@ -218,7 +222,7 @@ main = do
       let today = fromUniqDynamic $ uniqDynamic $ utctDay <$> currentClock
 
       -- Listing widget
-      let allBooks = join $ fmap distributeListOverDyn $ (map (view _2) . Map.elems) <$> allBooks'
+      let allBooks = join $ fmap distributeListOverDyn $ (map ((\(_, x, _) -> x)) . Map.elems) <$> allBooks'
       let chevalBooks = join $ fmap distributeListOverDyn $ (fmap (\(a, b, c) -> (,,) <$> a <*> b <*> c) . Map.elems) <$> allBooks'
       let chevalBooks1 = concatMap (\(rs, (t, books), user) -> (rs, t, user, ) <$> books) <$> chevalBooks
 
@@ -345,7 +349,7 @@ main = do
                    Right _ -> RenewIdle
               ]
 
-      renewRes <- renewBookAsync pushLog renewE
+      renewRes <- renewBook pushLog renewE
 
       performEvent_ $ renewRes <&> (\resM -> liftIO $ do
               case resM of
@@ -355,7 +359,7 @@ main = do
 
 
       res <- elAttr "table" ("class" =: "books" <> "id" =: "books") $ do
-          listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn (dueDate . view _4)) <$> chevalBooks1) $ \_idx d -> do
+          listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn (dueDate . (\(_, _, _, x) -> x))) <$> chevalBooks1) $ \_idx d -> do
             dyn ((\(_, _, user, book) -> displayBook user book today) <$> d)
 
       -- Merge all the events together
@@ -417,7 +421,8 @@ settingsPanel settingsDyn = do
           <$> textAreaElement
             ( def
                 & textAreaElementConfig_initialValue
-                .~ (toStrict $ decodeUtf8 $ encodePretty credentials)
+                -- TODO: maybe remove encode pretty ;)
+                .~ (toStrict $ decodeUtf8 $ encode credentials)
                 & textAreaElementConfig_elementConfig
                 . elementConfig_initialAttributes
                 .~ []

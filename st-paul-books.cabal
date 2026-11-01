@@ -53,38 +53,13 @@ extra-doc-files:    CHANGELOG.md
 common warnings
     ghc-options: -Wall -Wno-name-shadowing -Wno-partial-type-signatures -Wunused-packages
 
-library
+executable st-paul-books
     -- Import common warning flags.
     import:           warnings
 
-    -- Modules exported by the library.
-    exposed-modules:  Api, Books, ApiRequest
+    main-is:          Android.hs
 
-    -- Modules included in this library but not exported.
-    -- other-modules:
-
-    -- LANGUAGE extensions used by modules in this package.
-    -- other-extensions:
-
-    -- Other library packages from which modules are imported.
-    build-depends:    base, aeson, req, text, time, http-client, async, bytestring, http-client-tls
-    if impl(ghc >= 9.6)
-      build-depends: crypton-connection
-    if impl(ghc < 9.6)
-      build-depends:connection
-
-    -- Directories containing source files.
-    hs-source-dirs:   src
-
-    -- Base language which the package is written in.
-    default-language: Haskell2010
-
-executable summerize
-    -- Import common warning flags.
-    import:           warnings
-
-    -- .hs or .lhs file containing the Main module.
-    main-is:          Summerize.hs
+    other-modules: Webstorage, ApiXmlXhr, ApiRequest, Books, Api
 
     -- Modules included in this executable, other than Main.
     -- other-modules:
@@ -95,40 +70,12 @@ executable summerize
     -- Other library packages from which modules are imported.
     build-depends:
         base,
-        st-paul-books, text, aeson, time, PyF
-
-    if impl(ghc < 9.6)
-       buildable: False
+        reflex-dom-core, text, aeson, time, bytestring, jsaddle, containers, stm, lens, file-embed,
+         jsaddle-warp
 
     -- Directories containing source files.
-    hs-source-dirs:   app
+    hs-source-dirs:   app, src
 
     -- Base language which the package is written in.
     default-language: Haskell2010
-    ghc-options: -with-rtsopts=-N -threaded
-
-executable st-paul-books
-    -- Import common warning flags.
-    import:           warnings
-
-    -- .hs or .lhs file containing the Main module.
-    main-is:          Android.hs
-    other-modules: Webstorage, ApiXmlXhr
-
-    -- Modules included in this executable, other than Main.
-    -- other-modules:
-
-    -- LANGUAGE extensions used by modules in this package.
-    -- other-extensions:
-
-    -- Other library packages from which modules are imported.
-    build-depends:
-        base, stm, lens,
-        st-paul-books, reflex-dom, reflex-dom-core, text, aeson, time, aeson-pretty, bytestring, async, jsaddle, containers, file-embed
-
-    -- Directories containing source files.
-    hs-source-dirs:   app
-
-    -- Base language which the package is written in.
-    default-language: Haskell2010
-    ghc-options: -with-rtsopts=-N -threaded
+    ghc-options: -with-rtsopts=-N -threaded -Wunused-packages -O
