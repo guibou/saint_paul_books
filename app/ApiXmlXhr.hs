@@ -9,7 +9,6 @@
 module ApiXmlXhr where
 
 import Api hiding (iguana_root)
--- import ApiRequest
 import Books
 import Control.Concurrent.Async (async)
 import Control.Exception
@@ -23,6 +22,7 @@ import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import Data.Time
 import Debug.Trace (traceShow, traceShowId)
+import ApiRequest
 import Language.Javascript.JSaddle (MonadJSM)
 import GHC.IO (unsafePerformIO)
 import Control.Concurrent.STM
@@ -30,12 +30,8 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Reflex.Dom.Core
 
-refreshBook :: (TriggerEvent t m, PerformEvent t m, MonadIO (Performable m), MonadJSM (Performable m)) => Event t User -> m (Event t (Either Text (UTCTime, [Book])))
-refreshBook userEvent = do
-  iguanaSessionE <- getIguanaSession' userEvent
-  let e' = traceEvent "iguanaSession" iguanaSessionE
-  performEvent (pure () <$ e')
-  performEventAsync $ refreshBooksCallback <$> userEvent
+-- TODO: here all the semantic is copy/pasted between the different action, and
+-- the login phase is redone everytime, which maybe not optimal
 
 refreshBook :: (TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> Event t User -> m (Event t (Either Text (UTCTime, [Book])))
 refreshBook pushLog userEvent = performEventAsync $ (refreshBooksCallback pushLog) <$> userEvent
@@ -168,7 +164,6 @@ renewBook pushLog (book, User {..}) = do
       [RenewResponse{success = False, refusalReason}] -> pure (Left refusalReason)
       [RenewResponse{success = True, dueDate=newDueDate}] -> pure (Right (let Book{..} = book in Book{dueDate=newDueDate, ..}))
       _ -> pure (Left "Unknown error, see log")
--}
 
 getIguanaSession' event = do
   -- TODO: why is this POST?
