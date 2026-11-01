@@ -353,11 +353,15 @@ main = do
           listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn (dueDate . view _4)) <$> chevalBooks1) $ \_idx d -> do
             dyn ((\(_, _, user, book) -> displayBook user book today) <$> d)
 
-      let res' = (leftmost . Map.elems) <$> updated res
+      -- Merge all the events together
+      -- Attention, instead of leftmost, which "fixs" the event to the latest,
+      -- we use mergeWith in order to get something which update in time
+      let res' = mergeMap <$> updated res
       res'' <- switchHold never res'
-      res''' <- switchHold never res''
+      let res''' = mergeWith (\a _ -> a) . Map.elems <$> res''
+      res'''' <- switchHold never res'''
 
-      currentBookM <- foldDyn (\new _old -> Just new) Nothing res'''
+      currentBookM <- foldDyn (\new _old -> Just new) Nothing res''''
 
       pure ()
 
