@@ -1,0 +1,17 @@
+curl 'https://mediatheques-saintpaul.re/iguana/Rest.Server.cls?sessionId=M4kcbv7T77&method=user/credentials' \
+  -X POST \
+  -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0' \
+  -H 'Accept: */*' \
+  -H 'Accept-Language: en-US,en;q=0.9' \
+  -H 'Accept-Encoding: gzip, deflate, br, zstd' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://mediatheques-saintpaul.re' \
+  -H 'Connection: keep-alive' \
+  -H 'Referer: https://mediatheques-saintpaul.re/iguana/www.main.cls?surl=useractivities' \
+  -H 'Cookie: cookieControlPrefs=%5B%22preferences%22%2C%22analytics%22%2C%22marketing%22%5D; cookieControl=true; CSPSESSIONID-SP-443-UP-=001002020000M4kcbv7T77F6gMXVukFTilaBS77arV68Ozxpo2; CSPWSERVERID=G22xqL2U; PHPSESSID=meva8jptftnfd2hl8nqv6v3hqv' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'Priority: u=0' \
+  -H 'TE: trailers' \
+  --data-raw '{"request":{"language":"fre","serviceProfile":"Iguana","locationProfile":"","user":"X0000215550","password":"06061986","institution":""}}'

@@ -262,9 +262,9 @@ widget = do
 
         let refreshEvent =
               leftmost
-                [ updated userDyn,
-                  tag (current userDyn) refreshnerdFontButtonE,
-                  tag (current userDyn) autoRefreshEvent
+                [ traceEvent "update userDyn" $ updated userDyn,
+                  traceEvent "refreshnerdFontButtoE" $ tag (current userDyn) refreshnerdFontButtonE,
+                  traceEvent "autorefreshevent" $ tag (current userDyn) autoRefreshEvent
                 ]
         (fanEither -> (updateError, updateBooks)) <- refreshBook (logWithTime pushLog) refreshEvent
 

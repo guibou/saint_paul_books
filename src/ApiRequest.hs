@@ -62,9 +62,7 @@ getIguanaSession = do
       bsResponse
       mempty
 
-  let cookies = responseCookieJar response
-  let (traceShowId -> iguanaSessionId) = extractSessionId (responseBody response)
-  pure IguanaSession {..}
+  pure (error "nop")
 
 -- | Log to the library. Returns an 'Auth' which is valid for a few time (not
 -- clear how much).

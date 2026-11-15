@@ -54,9 +54,17 @@ data Auth = Auth
   deriving (Show)
 
 data IguanaSession = IguanaSession
-  { iguanaSessionId :: Text
+  { iguanaSessionId :: Text,
+    cookies :: Text
   }
-  deriving (Show)
+  deriving (Show, Generic)
+
+
+instance FromJSON IguanaSession where
+  parseJSON = withObject "IguanaSession" $ \o -> do
+    iguanaSessionId <- o .: "sessionId"
+    cookies <- o .: "cookies"
+    pure $ IguanaSession {..}
 
 -- | Actually, we deserialize the Item query as Value to keep the complete
 -- output payload on disk, if we would like to edit the display and use more
@@ -65,13 +73,6 @@ data Items = Items
   { items :: [Value]
   }
   deriving (Show, FromJSON, Generic)
-
-extractSessionId :: _ -> Text
-extractSessionId t = do
-  let (_, rest) = BS.breakSubstring sessionIdPrefix t
-  decodeUtf8 $ BS.takeWhile (/= '\'') $ BS.drop 1 $ BS.dropWhile (/= '\'') rest
-  where
-    sessionIdPrefix = "Vfocus.Settings.sessionID = '"
 
 data User = User
   { credential :: Credential,
