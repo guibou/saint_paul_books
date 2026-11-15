@@ -54,8 +54,7 @@ data Auth = Auth
   deriving (Show)
 
 data IguanaSession = IguanaSession
-  { iguanaSessionId :: Text,
-    cookies :: CookieJar
+  { iguanaSessionId :: Text
   }
   deriving (Show)
 

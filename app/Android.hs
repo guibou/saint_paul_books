@@ -18,7 +18,7 @@
 
 module Main (main) where
 
-import Api
+import Api ()
 import ApiXmlXhr (refreshBook, renewBookAsync)
 import Books
 import Control.Monad (join, void)
@@ -48,6 +48,7 @@ import Language.Javascript.JSaddle.Object
 import Control.Lens ((^.), view, _2, _1, _4)
 -- import Language.Javascript.JSaddle.Warp (run)
 import Language.Javascript.JSaddle.Warp
+import Api
 
 pattern CapacityPerUser :: Int
 pattern CapacityPerUser = 10

@@ -113,7 +113,7 @@ executable st-paul-books
 
     -- .hs or .lhs file containing the Main module.
     main-is:          Android.hs
-    other-modules: Webstorage, ApiXmlXhr
+    other-modules: Webstorage, ApiXmlXhr, ApiRequest, Books, Api
 
     -- Modules included in this executable, other than Main.
     -- other-modules:
@@ -124,10 +124,15 @@ executable st-paul-books
     -- Other library packages from which modules are imported.
     build-depends:
         base,
-        st-paul-books, reflex-dom, reflex-dom-core, text, aeson, time, aeson-pretty, bytestring, async, jsaddle, containers, jsaddle-warp, stm, lens, file-embed
+        reflex-dom, reflex-dom-core, text, aeson, time, aeson-pretty, bytestring, async, jsaddle, containers, jsaddle-warp, stm, lens, file-embed
+    build-depends:    base, aeson, req, text, time, http-client, async, bytestring, http-client-tls
+    if impl(ghc >= 9.6)
+      build-depends: crypton-connection
+    if impl(ghc < 9.6)
+      build-depends:connection
 
     -- Directories containing source files.
-    hs-source-dirs:   app
+    hs-source-dirs:   app, src
 
     -- Base language which the package is written in.
     default-language: Haskell2010

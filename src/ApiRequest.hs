@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module ApiRequest where
 
@@ -17,6 +18,7 @@ import Network.Connection (TLSSettings (..))
 import Network.HTTP.Client.TLS (mkManagerSettings, newTlsManagerWith)
 import Network.HTTP.Req
 import Data.Time (Day)
+import Debug.Trace (traceShowId)
 
 newHttpConfig :: IO HttpConfig
 newHttpConfig = do
@@ -41,7 +43,6 @@ iguanaRequest IguanaSession {..} method payload = do
       jsonResponse
       ( "sessionId" =: iguanaSessionId
           <> "method" =: method
-          <> cookieJar cookies
       )
   pure response
 
@@ -62,7 +63,7 @@ getIguanaSession = do
       mempty
 
   let cookies = responseCookieJar response
-  let iguanaSessionId = extractSessionId (responseBody response)
+  let (traceShowId -> iguanaSessionId) = extractSessionId (responseBody response)
   pure IguanaSession {..}
 
 -- | Log to the library. Returns an 'Auth' which is valid for a few time (not

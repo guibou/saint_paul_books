@@ -1,3 +1,4 @@
+{-# OPTIONS -Wall #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -5,6 +6,8 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 
 module ApiXmlXhr where
 
@@ -12,7 +15,7 @@ import Api hiding (iguana_root)
 import Books
 import Control.Concurrent.Async (async)
 import Control.Exception
-import Control.Monad (void)
+import Control.Monad (void, join)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson
 import Data.ByteString.Char8 (toStrict)
@@ -29,12 +32,17 @@ import Control.Concurrent.STM
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Reflex.Dom.Core
+import Data.Aeson.Types (Pair)
+import Control.Lens ((<&>))
+import Data.Functor (($>))
+import Control.Monad.Fix (MonadFix)
+import Data.Time.Calendar.OrdinalDate
 
 -- TODO: here all the semantic is copy/pasted between the different action, and
 -- the login phase is redone everytime, which maybe not optimal
 
-refreshBook :: (TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> Event t User -> m (Event t (Either Text (UTCTime, [Book])))
-refreshBook pushLog userEvent = performEventAsync $ (refreshBooksCallback pushLog) <$> userEvent
+refreshBook pushLog userEvent = do
+  refreshBooks userEvent
 
 renewBookAsync :: (TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => (Text -> IO ()) -> Event t (Book, User) -> m (Event t (Either Text Book))
 renewBookAsync pushLog bookEvent = performEventAsync $ (renewBookCallback pushLog) <$> bookEvent
@@ -53,33 +61,6 @@ renewBookCallback pushLog (book, user) callback = do
     callback res
   pure ()
 
-refreshBooksCallback :: (MonadIO m) => (Text -> IO ()) -> User -> (Either Text (UTCTime, [Book]) -> IO ()) -> m ()
-refreshBooksCallback pushLog user callback = do
-  liftIO $ pushLog "-----------------------------------------"
-  let logWithName t = pushLog (displayName user <> ": " <> t)
-  void $ liftIO $ async $ do
-    resM <- try $ refreshBooks logWithName user
-    res <- case resM of
-      Right res -> pure res
-      Left (err :: SomeException) -> do
-        pushLog $ "Error" <> (Text.pack $ show err)
-        pushLog $ "Let's try to refresh the credentials"
-
-        -- Let's invalide the previous identificatino token and retry
-        atomically $ do
-          writeTVar sessionVar NoSession
-          modifyTVar authsVar (Map.delete $ credential user)
-
-        resM <- try $ refreshBooks logWithName user
-        case resM of
-          Right res -> pure res
-          Left (err :: SomeException) -> do
-            pushLog $ "FATALError:" <> (Text.pack $ show err)
-
-            pure $ Left (Text.pack $ show err)
-
-    callback res
-  pure ()
 
 {-# NOINLINE sessionVar #-}
 sessionVar :: TVar SessionStatus
@@ -90,8 +71,63 @@ authsVar = unsafePerformIO $ newTVarIO mempty
 
 data SessionStatus = NoSession | GettingSession | AvailableSession IguanaSession
 
-refreshBooks :: (Text -> IO ()) -> User -> IO (Either Text (UTCTime, [Book]))
-refreshBooks pushLog User {..} = do
+refreshBooks :: forall t m. (MonadWidget t m, MonadJSM (Performable m))
+                       => Event t User
+                       -> m (Event t (Either Text (UTCTime, [Book])))
+refreshBooks eUser = do
+  let eCredential = fmap credential eUser
+
+  eMaybeSession <- getIguanaSession' eCredential
+  let eSession = fmapMaybe id (traceEvent "session" eMaybeSession) -- On filtre le Just Session
+
+  dCredential <- holdDyn (Credential{login="nologin", password="nopassword"}) eCredential
+  dSession    <- holdDyn (IguanaSession "No session") eSession
+  display dSession
+  let eLoginTrigger = attachPromptlyDynWith (,) dCredential eSession
+  let blork = Text.pack . show <$> eLoginTrigger
+  eBlork <- holdDyn "NO blork" blork
+  display eBlork
+
+  eLoginTrigger2 <- delay 1 eLoginTrigger
+  
+  eAuth <- fmap switchDyn $ widgetHold (return never) $ fmap (\(cred, sess) -> do
+      ePostBuild <- getPostBuild
+      getLogin' sess cred ePostBuild
+    ) eLoginTrigger
+
+  -- On stocke l'Auth reçue dans une Dynamic
+  dAuth <- holdDyn (Auth{iguanaSession = IguanaSession "no session auth yet", session = Session{sessionId = "no session id", token = "no useless token"}}) eAuth
+  display dAuth
+
+  eResult <- fmap switchDyn $ widgetHold (return never) $ fmap (\auth -> do
+      getLoan' auth eAuth
+    ) eAuth
+
+  pure $ eResult <&> \items ->
+    case eitherDecode @[JSONBook] (encode items) of
+      Right books -> do
+        Right (UTCTime (fromOrdinalDate 0 0) 0, coerce books)
+      Left e -> Left (Text.pack e)
+
+-- | Returns all the book owned by an authenticated user
+getLoan' :: (Monad m, MonadJSM (Performable m), PerformEvent t m, TriggerEvent t m) => Auth -> Event t x -> m (Event t [Data.Aeson.Value])
+getLoan' Auth {..} triggerEvent = do
+    responseEvent <- performRequestAsync (triggerEvent $> iguanaRequest' iguanaSession "user/loans"
+      [ "sessionId" .= sessionId session,
+        -- Note: most of these keys appears in the query I reverse
+        -- engineered. I'm too lazy to try to remove some of them.
+        "LocationProfile" .= ("" :: Text),
+        "range" .= object ["from" .= (1 :: Int), "to" .= (10 :: Int)],
+        "sort" .= object ["sortBy" .= ("!" :: Text), "sortDirection" .= ("ASC" :: Text)]
+      ])
+    pure $ fmap (\response -> do
+                        case decodeXhrResponse response of
+                          -- TODO: better error handling
+                          Nothing -> []
+                          Just (Response (Items items)) -> items
+                        ) responseEvent
+
+{-do
   let logSection section action = do
         let start = do
               pushLog ("starting " <> section)
@@ -142,6 +178,7 @@ refreshBooks pushLog User {..} = do
         mtime <- getCurrentTime
         pure $ Right (mtime, coerce books)
       Left err -> pure (Left $ Text.pack err)
+-}
 
 renewBook :: (Text -> IO ()) -> (Book, User) -> IO (Either Text Book)
 renewBook pushLog (book, User {..}) = do
@@ -165,11 +202,40 @@ renewBook pushLog (book, User {..}) = do
       [RenewResponse{success = True, dueDate=newDueDate}] -> pure (Right (let Book{..} = book in Book{dueDate=newDueDate, ..}))
       _ -> pure (Left "Unknown error, see log")
 
-getIguanaSession' event = do
-  -- TODO: why is this POST?
-  let request = XhrRequest "POST" (iguana_root <> "/Rest.Server.cls") (def {_xhrRequestConfig_withCredentials = False})
-  response <- performRequestAsync (request <$ event)
-  pure $ _xhrResponse_responseText <$> response
+
+-- | Log to the library. Returns an 'Auth' which is valid for a few time (not
+-- clear how much).
+getLogin' :: (Monad m, MonadJSM (Performable m), PerformEvent t m, TriggerEvent t m) => IguanaSession -> Credential -> Event t x -> m (Event t Auth)
+getLogin' iguanaSession Credential {..} triggerEvent = do
+    res <- performRequestAsync (triggerEvent $> iguanaRequest' iguanaSession "user/credentials"
+      -- Note: most of these keys appears in the query I reverse
+      -- engineered. I'm too lazy to try to remove some of them.
+      [ "language" .= ("fre" :: Text),
+        "serviceProfile" .= ("Iguana" :: Text),
+        "locationProfile" .= ("" :: Text),
+        "user" .= login,
+        "password" .= password,
+        "institution" .= ("" :: Text)
+      ])
+
+    pure $ fmap (\response -> do
+                            case decodeXhrResponse response of
+                              Just (Response session) -> Auth{..}
+                              Nothing -> Auth{session = Session{sessionId="error", token="wtf error"}, ..}
+                            ) res
+
+
+iguanaRequest' :: IguanaSession -> Text -> [Pair] -> XhrRequest _
+iguanaRequest' IguanaSession {..} method payload = do
+  let req = postJson (iguana_root <> "/Rest.Server.cls?sessionId=" <> iguanaSessionId <> "&method=" <> method) $ object ["request" .= object payload]
+  req { _xhrRequest_config = (_xhrRequest_config req) { _xhrRequestConfig_withCredentials = True } }
+
+
+getIguanaSession' :: (Monad m, MonadJSM (Performable m), PerformEvent t m, TriggerEvent t m) => Event t b -> m (Event t (Maybe IguanaSession))
+getIguanaSession' triggerEvent = do
+  let request = XhrRequest "GET" (iguana_root <> "/Rest.Server.cls") (def {_xhrRequestConfig_withCredentials = True})
+  response <- performRequestAsync (request <$ triggerEvent)
+  pure $ extractIguanaSession <$> response
 
 extractIguanaSession :: XhrResponse -> Maybe IguanaSession
 extractIguanaSession response = do
@@ -186,4 +252,5 @@ extractIguanaSession response = do
 -- In the future this could be set as an API parameter so it may query other
 -- iguana libraries
 iguana_root :: Text
-iguana_root = "https://mediatheques-saintpaul.re/iguana"
+-- iguana_root = "https://mediatheques-saintpaul.re/iguana"
+iguana_root = "https://spring-cake-0818.guillaum-bouchard.workers.dev/iguana"
