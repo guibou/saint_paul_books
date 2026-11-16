@@ -46,8 +46,7 @@ import Webstorage (webStorageDyn)
 import Language.Javascript.JSaddle (liftJSM)
 import Language.Javascript.JSaddle.Object
 import Control.Lens ((^.), view, _2, _1, _4)
--- import Language.Javascript.JSaddle.Warp (run)
-import Language.Javascript.JSaddle.Warp
+-- import Language.Javascript.JSaddle.Warp
 import Api
 
 pattern CapacityPerUser :: Int
@@ -125,8 +124,7 @@ headWidget = do
   elAttr "script" ("src" =: "https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js") $ pure ()
   elAttr "style" ("type" =: "text/css") $ text $ TE.decodeUtf8 css
 
-main :: IO ()
-main = run 8085 widget
+main = widget
 
 widget :: _
 widget = do
