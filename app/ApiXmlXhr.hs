@@ -12,28 +12,22 @@
 module ApiXmlXhr where
 
 import Api hiding (iguana_root)
-import ApiRequest
 import Books
 import Control.Concurrent.Async (async)
 import Control.Concurrent.STM
 import Control.Exception
 import Control.Lens ((<&>))
-import Control.Monad (join, void)
-import Control.Monad.Fix (MonadFix)
+import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson
 import Data.Aeson.Types (Pair)
-import Data.ByteString.Char8 (toStrict)
 import Data.Coerce (coerce)
 import Data.Functor (($>))
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import Data.Time
-import Data.Time.Calendar.OrdinalDate
-import Debug.Trace (traceShow, traceShowId)
+import Debug.Trace (traceShow)
 import GHC.IO (unsafePerformIO)
 import Language.Javascript.JSaddle (MonadJSM)
 import Reflex.Dom.Core
@@ -65,6 +59,8 @@ renewBookCallback pushLog (book, user) callback = do
 sessionVar :: TVar SessionStatus
 sessionVar = unsafePerformIO $ newTVarIO NoSession
 
+-- TODO: funny, I forgot the NOINLINE here, it may be the reason why so much
+-- issue happened with authentifications.
 authsVar :: TVar (Map Credential Auth)
 authsVar = unsafePerformIO $ newTVarIO mempty
 
@@ -142,61 +138,9 @@ getLoan' Auth {..} triggerEvent = do
       )
       responseEvent
 
-{-do
-  let logSection section action = do
-        let start = do
-              pushLog ("starting " <> section)
-              t <- getCurrentTime
-              pure t
-            end t = do
-              t' <- getCurrentTime
-              let deltaTime = t' `diffUTCTime` t
-              pushLog ("ending " <> section <> " in " <> Text.pack (show deltaTime))
-        bracket start end (const action)
-  logSection "refreshBooks" $ do
-    session <- logSection "getIguanaSessionCache" $ do
-      sessionM <- atomically $ do
-        sessionState <- readTVar sessionVar
-        case sessionState of
-          AvailableSession sess -> pure $ Just sess
-          NoSession -> do
-            writeTVar sessionVar GettingSession
-            pure Nothing
-          GettingSession -> retry
-
-      case sessionM of
-        Just session -> do
-          pushLog "Session from cache"
-          pure session
-        Nothing -> do
-          pushLog "Computing session from cache"
-          logSection "getIguanaSession" $ do
-            session <- getIguanaSession
-            atomically $ writeTVar sessionVar (AvailableSession session)
-            pure session
-
-    auth <- logSection "getLogin" $ do
-      auths <- readTVarIO authsVar
-      case Map.lookup credential auths of
-        Just auth -> do
-          pushLog "Auth from cache"
-          pure auth
-        Nothing -> do
-          logSection "getLoginFromServer" $ do
-            auth <- getLogin session credential
-            atomically $ modifyTVar authsVar (Map.insert credential auth)
-            pure auth
-    items <- logSection "getLoan" $ getLoan auth
-
-    case eitherDecode @[JSONBook] (encode items) of
-      Right books -> do
-        mtime <- getCurrentTime
-        pure $ Right (mtime, coerce books)
-      Left err -> pure (Left $ Text.pack err)
--}
-
 renewBook :: (Text -> IO ()) -> (Book, User) -> IO (Either Text Book)
-renewBook pushLog (book, User {..}) = do
+renewBook pushLog (book, User {..}) = error "renew not done yet"
+  {-
   let logSection section action = do
         let start = do
               pushLog ("starting " <> section)
@@ -216,6 +160,7 @@ renewBook pushLog (book, User {..}) = do
       [RenewResponse {success = False, refusalReason}] -> pure (Left refusalReason)
       [RenewResponse {success = True, dueDate = newDueDate}] -> pure (Right (let Book {..} = book in Book {dueDate = newDueDate, ..}))
       _ -> pure (Left "Unknown error, see log")
+  -}
 
 -- | Log to the library. Returns an 'Auth' which is valid for a few time (not
 -- clear how much).

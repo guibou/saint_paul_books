@@ -67,7 +67,7 @@ library
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    base, aeson, req, text, time, http-client, async, bytestring, http-client-tls
+    build-depends:    base, aeson, text, time, http-client, async, bytestring, http-client-tls
     if impl(ghc >= 9.6)
       build-depends: crypton-connection
     if impl(ghc < 9.6)
@@ -125,7 +125,7 @@ executable st-paul-books
     build-depends:
         base,
         reflex-dom, reflex-dom-core, text, aeson, time, aeson-pretty, bytestring, async, jsaddle, containers, jsaddle-warp, stm, lens, file-embed
-    build-depends:    base, aeson, req, text, time, http-client, async, bytestring, http-client-tls
+    build-depends:    base, aeson, text, time, http-client, async, bytestring, http-client-tls
     if impl(ghc >= 9.6)
       build-depends: crypton-connection
     if impl(ghc < 9.6)

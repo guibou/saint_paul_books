@@ -14,19 +14,8 @@
 module Api where
 
 import Data.Aeson
-import qualified Data.ByteString.Char8 as BS
 import Data.Text
-import Data.Text.Encoding (decodeUtf8)
 import GHC.Generics
-import Network.HTTP.Client (CookieJar)
-import Network.HTTP.Req
-
--- | Represents the root of the iguana library
---
--- In the future this could be set as an API parameter so it may query other
--- iguana libraries
-iguana_root :: Url Https
-iguana_root = https "mediatheques-saintpaul.re" /: "iguana"
 
 -- | represents credentials for login
 data Credential = Credential
