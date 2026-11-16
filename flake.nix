@@ -13,6 +13,11 @@
     in
     rec {
       packages.x86_64-linux = rec {
+        # I need to test wasm, in GHC 10.0 it seems that we can directly
+        # iterate in GHCi with it
+
+        # Meaning, no more jsaddle-warp, and direct test in the browser instead
+        # of using chromium.
         javascript_pkg = pkgs.pkgsCross.ghcjs.haskellPackages.callCabal2nix "st-paul-book" ./. { };
         javascript = pkgs.runCommand "js-release" {}
         ''

@@ -374,6 +374,8 @@ widget = do
       -- Merge all the events together
       -- Attention, instead of leftmost, which "fixs" the event to the latest,
       -- we use mergeWith in order to get something which update in time
+      --
+      -- Note: there is still a bug there, I need to understand what is happening
       let res' = mergeMap <$> updated res
       res'' <- switchHold never res'
       let res''' = mergeWith (\a _ -> a) . Map.elems <$> res''
@@ -392,7 +394,9 @@ displayBook user book today = do
       
       pure (domEvent Click e $> (book, user))
 
-    el "td" $ text $ Text.take 1 (displayName user)
+    el "td" $ do
+      -- Take the first letter of the username as "short" name
+      text $ Text.take 1 (displayName user)
     case status book of
       DueAt dueDate -> do
         let remainingDays = diffDays dueDate <$> today
