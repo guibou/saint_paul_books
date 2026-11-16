@@ -135,8 +135,12 @@ widget = do
      settingsDyn <- foldDyn (\f x -> f x) initSetting updateSettings
 
      updateSettings <- elDynAttr "div" (settingsDyn <&> \settings -> "style" =: case fontSize settings of
-                        Nothing -> ""
-                        Just pct -> "font-size: " <> tshow pct <> "%") $ mdo
+                        Nothing -> "font-size: 4vw"
+                        -- 4vh means that approximately, each letter will take 4% of the viewport
+                        -- So we can store 25 letters approximately, which is
+                        -- the number of letters in the header (there are 29 +
+                        -- 4 icons). Basically, it fits.
+                        Just pct -> "font-size: " <> tshow (fromIntegral @_ @Double pct / 100 * 4) <> "vw") $ mdo
       let globalRefreshingStates = join $ fmap distributeListOverDyn ((map (\(x, _, _) -> x) . Map.elems) <$> allBooks')
       -- Header widget
       headerE <- el "div" $ do
