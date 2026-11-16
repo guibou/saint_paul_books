@@ -66,7 +66,8 @@ data Settings = Settings
   { capacityThreshold :: Int,
     loanDayThreshold :: Int,
     fontSize :: Maybe Int,
-    credentials :: [User]
+    credentials :: [User],
+    iguanaProxy :: Text
   }
   deriving (Show, FromJSON, ToJSON, Generic)
 
@@ -76,7 +77,8 @@ defaultSettings =
     { capacityThreshold = 8,
       loanDayThreshold = 5,
       fontSize = Nothing,
-      credentials = []
+      credentials = [],
+      iguanaProxy = ""
     }
 
 niceAge :: NominalDiffTime -> Text
@@ -127,7 +129,6 @@ main = widget
 
 widget :: _
 widget = do
-  -- run 8081 $ 
   mainWidgetWithHead headWidget $
     mdo
      pb <- getPostBuild
