@@ -27,7 +27,6 @@ import Data.Map.Strict (Map)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Time
-import Debug.Trace (traceShow)
 import GHC.IO (unsafePerformIO)
 import Language.Javascript.JSaddle (MonadJSM)
 import Reflex.Dom.Core
@@ -209,7 +208,7 @@ getIguanaSession' triggerEvent = do
 
 extractIguanaSession :: XhrResponse -> Maybe IguanaSession
 extractIguanaSession response = do
-  decodeXhrResponse $ traceShow (_xhrResponse_responseText response) response
+  decodeXhrResponse $ response
 
 -- | Represents the root of the iguana library
 --
