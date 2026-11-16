@@ -11,12 +11,11 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Main where
+module Android (widget) where
 
 import Api ()
 import ApiXmlXhr
@@ -25,8 +24,6 @@ import Control.Monad (join, void)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson
-import Data.ByteString.Char8 (ByteString)
-import Data.FileEmbed
 import Data.Functor (($>), (<&>))
 import Data.List (sortOn)
 import qualified Data.Map.Strict as Map
@@ -36,7 +33,6 @@ import qualified Data.Text as Text
 import Data.Text.Encoding (encodeUtf8)
 import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Encoding (decodeUtf8)
-import qualified Data.Text.Encoding as TE
 import Data.Text.Read (decimal)
 import Data.Time
 import GHC.Generics
@@ -45,7 +41,6 @@ import Webstorage (webStorageDyn)
 import Language.Javascript.JSaddle (liftJSM)
 import Language.Javascript.JSaddle.Object
 import Control.Lens ((^.))
-import Language.Javascript.JSaddle.Warp
 import Api
 
 pattern CapacityPerUser :: Int
@@ -98,9 +93,6 @@ isError :: _
 isError (RefreshError _) = True
 isError _ = False
 
-css :: ByteString
-css = $(embedFile "static/style.css")
-
 nerdFontItem :: DomBuilder t m => Text -> m ()
 nerdFontItem nfClass = elAttr "i" ("class" =: ("nf " <> nfClass)) $ pure ()
 
@@ -123,10 +115,7 @@ logWithTime pushLog message = do
 headWidget :: DomBuilder t m => m ()
 headWidget = do
   elAttr "script" ("src" =: "https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js") $ pure ()
-  elAttr "style" ("type" =: "text/css") $ text $ TE.decodeUtf8 css
-
-main :: IO ()
-main = run 8080 widget
+  elAttr "link" ("rel" =: "stylesheet" <> "href" =: "style.css") $ pure ()
 
 widget :: _
 widget = do

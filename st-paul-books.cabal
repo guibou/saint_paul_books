@@ -57,9 +57,9 @@ executable st-paul-books
     -- Import common warning flags.
     import:           warnings
 
-    main-is:          Android.hs
+    main-is:          Main.hs
 
-    other-modules: Webstorage, ApiXmlXhr, ApiRequest, Books, Api
+    other-modules: Webstorage, ApiXmlXhr, ApiRequest, Books, Api, Android
 
     -- Modules included in this executable, other than Main.
     -- other-modules:
@@ -70,8 +70,11 @@ executable st-paul-books
     -- Other library packages from which modules are imported.
     build-depends:
         base,
-        reflex-dom-core, text, aeson, time, bytestring, jsaddle, containers, stm, lens, file-embed,
+        reflex-dom-core, text, aeson, time, bytestring, jsaddle, containers, stm, lens,
          jsaddle-warp
+
+    if !arch(javascript)
+        build-depends: wai, websockets, wai-app-static, warp
 
     -- Directories containing source files.
     hs-source-dirs:   app, src

@@ -12,8 +12,15 @@
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
     in
     rec {
-      packages.x86_64-linux = {
-        javascript = pkgs.pkgsCross.ghcjs.haskellPackages.callCabal2nix "st-paul-book" ./. { };
+      packages.x86_64-linux = rec {
+        javascript_pkg = pkgs.pkgsCross.ghcjs.haskellPackages.callCabal2nix "st-paul-book" ./. { };
+        javascript = pkgs.runCommand "js-release" {}
+        ''
+          mkdir $out
+          cp ${javascript_pkg}/bin/st-paul-books.jsexe/all.js $out
+          cp ${javascript_pkg}/bin/st-paul-books.jsexe/index.html $out
+          cp ${./static}/style.css $out/style.css
+        '';
         default = pkgs.haskellPackages.callCabal2nix "st-paul-book" ./. { };
       };
 
@@ -21,7 +28,12 @@
         # Basic dev-shell with cabal/hls and the dependencies for this package,
         # everything built by cabal, that's easier.
         default = packages.x86_64-linux.default.env.overrideAttrs (old: {
-          nativeBuildInputs = old.nativeBuildInputs ++ (with pkgs; [ cabal-install haskell-language-server ]);
+          nativeBuildInputs = old.nativeBuildInputs ++ (
+            with pkgs; [
+              cabal-install
+              haskellPackages.haskell-language-server
+            ]
+          );
         });
 
         js = pkgs.mkShell {
