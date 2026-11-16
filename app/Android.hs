@@ -165,13 +165,20 @@ widget = do
               _ -> do
                 elAttr "div" ("id" =: "status") $ do
                           let oldest_update = minimum (map fst books)
+                          let status = foldStatus $ concatMap snd books
 
-                          let total = sum $ map (\(_mtime, items) -> length @[] items) books
-                              capacity = length books * CapacityPerUser
+                          let capacity = length books * CapacityPerUser
 
                           el "div" $ do
                             text "Capacity: "
-                            text $ tshow total <> "/" <> tshow capacity
+                            text $ tshow (due status) <> "/" <> tshow capacity
+                            let total_reservation = available status + waiting status
+                            if total_reservation > 0
+                            then do
+                              text "Reservation: "
+                              text $ tshow (available status) <> "/" <> tshow total_reservation
+                            else
+                              pure ()
                           dyn_ $
                              globalRefreshingStates <&> \refreshingState ->
                                if

@@ -3,8 +3,8 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Books where
 
@@ -35,6 +35,25 @@ newtype JSONBook = JSONBook Book
 
 instance FromJSON JSONBook where
   parseJSON value = JSONBook <$> bookFromJSON value
+
+-- | What is actually stored in the book store
+data BookStoreStatus = BookStoreStatus
+  {
+    -- | Number of rented books
+    due :: Int,
+    -- | Waiting for reservation
+    waiting :: Int,
+    -- | Reservation available
+    available :: Int
+  }
+  deriving (Show)
+
+foldStatus :: [Book] -> BookStoreStatus
+foldStatus = flip foldl' (BookStoreStatus 0 0 0) $ \acc book ->
+  case status book of
+    DueAt {} -> acc {due = due acc + 1}
+    Waiting -> acc {waiting = waiting acc + 1}
+    Available -> acc {available = available acc + 1}
 
 -- | This is used to parse a Book from the iguana json payload
 -- The ToJSON / FromJSON instances for Book are used for internal API serialization
