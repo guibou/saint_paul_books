@@ -116,6 +116,7 @@ headWidget :: DomBuilder t m => m ()
 headWidget = do
   elAttr "script" ("src" =: "https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js") $ pure ()
   elAttr "link" ("rel" =: "stylesheet" <> "href" =: "style.css") $ pure ()
+  elAttr "link" ("rel" =: "manifest" <> "href" =: "manifest.json") $ pure ()
 
 widget :: _
 widget = do

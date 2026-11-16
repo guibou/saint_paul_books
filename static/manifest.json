@@ -1,0 +1,18 @@
+{
+  "name": "Saint-Paul books",
+  "short_name": "SPB",
+  "icons": [
+    {
+      "src": "512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    },
+    {
+      "src": "192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    }
+  ],
+  "start_url": "./.",
+  "display": "minimal-ui"
+}

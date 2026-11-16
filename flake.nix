@@ -24,7 +24,7 @@
           mkdir $out
           cp ${javascript_pkg}/bin/st-paul-books.jsexe/all.js $out
           cp ${javascript_pkg}/bin/st-paul-books.jsexe/index.html $out
-          cp ${./static}/style.css $out/style.css
+          cp ${./static}/* $out
         '';
         default = pkgs.haskellPackages.callCabal2nix "st-paul-book" ./. { };
       };
