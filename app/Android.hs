@@ -422,6 +422,7 @@ settingsPanel settingsDyn = do
           <$> textAreaElement
             ( def
                 & textAreaElementConfig_initialValue
+                -- TODO: maybe remove encode pretty ;)
                 .~ (toStrict $ decodeUtf8 $ encodePretty credentials)
                 & textAreaElementConfig_elementConfig
                 . elementConfig_initialAttributes
