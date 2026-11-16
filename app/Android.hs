@@ -44,7 +44,7 @@ import Reflex.Dom.Core
 import Webstorage (webStorageDyn)
 import Language.Javascript.JSaddle (liftJSM)
 import Language.Javascript.JSaddle.Object
-import Control.Lens ((^.), view, _2, _1, _4)
+import Control.Lens ((^.))
 -- import Language.Javascript.JSaddle.Warp
 import Api
 
@@ -146,7 +146,7 @@ widget = do
      updateSettings <- elDynAttr "div" (settingsDyn <&> \settings -> "style" =: case fontSize settings of
                         Nothing -> ""
                         Just pct -> "font-size: " <> tshow pct <> "%") $ mdo
-      let globalRefreshingStates = join $ fmap distributeListOverDyn ((map (view _1) . Map.elems) <$> allBooks')
+      let globalRefreshingStates = join $ fmap distributeListOverDyn ((map (\(x, _, _) -> x) . Map.elems) <$> allBooks')
       -- Header widget
       headerE <- el "div" $ do
         dyn $ flip fmap allBooks $ \books -> do
@@ -220,7 +220,7 @@ widget = do
       let today = fromUniqDynamic $ uniqDynamic $ utctDay <$> currentClock
 
       -- Listing widget
-      let allBooks = join $ fmap distributeListOverDyn $ (map (view _2) . Map.elems) <$> allBooks'
+      let allBooks = join $ fmap distributeListOverDyn $ (map ((\(_, x, _) -> x)) . Map.elems) <$> allBooks'
       let chevalBooks = join $ fmap distributeListOverDyn $ (fmap (\(a, b, c) -> (,,) <$> a <*> b <*> c) . Map.elems) <$> allBooks'
       let chevalBooks1 = concatMap (\(rs, (t, books), user) -> (rs, t, user, ) <$> books) <$> chevalBooks
 
@@ -357,7 +357,7 @@ widget = do
 
 
       res <- elAttr "table" ("class" =: "books" <> "id" =: "books") $ do
-          listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn (dueDate . view _4)) <$> chevalBooks1) $ \_idx d -> do
+          listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn (dueDate . (\(_, _, _, x) -> x))) <$> chevalBooks1) $ \_idx d -> do
             dyn ((\(_, _, user, book) -> displayBook user book today) <$> d)
 
       -- Merge all the events together

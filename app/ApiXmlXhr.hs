@@ -16,13 +16,12 @@ import Books
 import Control.Concurrent.Async (async)
 import Control.Concurrent.STM
 import Control.Exception
-import Control.Lens ((<&>))
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson
 import Data.Aeson.Types (Pair)
 import Data.Coerce (coerce)
-import Data.Functor (($>))
+import Data.Functor (($>), (<&>))
 import Data.Map.Strict (Map)
 import Data.Text (Text)
 import qualified Data.Text as Text
