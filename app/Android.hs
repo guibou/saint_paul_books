@@ -285,16 +285,25 @@ widget = do
 
             dyn_ $
               refreshStatus <&> \status -> do
+                dyn_ $
+                      booksDyn <&> \(_, books) -> do
+                        let status = foldStatus books
+                        text $ tshow $ due status
+                        text $ " / " <> tshow CapacityPerUser
+                        text " "
+                        let total_reservation = available status + waiting status
+                        if total_reservation > 0
+                        then do
+                          text "Reservation: "
+                          text $ tshow (available status) <> "/" <> tshow total_reservation
+                        else
+                          pure ()
                 case status of
                   Refreshing -> do
                     el "progress" $ text ""
-                  Idle -> do
-                    dyn_ $
-                      booksDyn <&> \(_, books) -> do
-                        text $ tshow $ length books
-                        text $ " / " <> tshow CapacityPerUser
-                        text " "
                   RefreshError t -> text t
+                  Idle ->
+                    pure ()
           el "div" $ do
              -- I don't really understand, but if there is no delay, the
              -- barcode is not displayed correctly.
