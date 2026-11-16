@@ -98,10 +98,15 @@ refreshBooks eUser = do
           )
           eAuth
 
-  d1 <- holdDyn [] eResult
-  d2 <- holdDyn [] eReservation
-  let dCombined = zipDynWith (\xs ys -> (xs <> ys)) d1 d2
-  let res = updated dCombined
+  -- Here, I could use performRequests, but I don't really like the API.
+  -- Instead, I'll build a dynamic and filter until we get both results
+  d1 <- holdDyn Nothing (Just <$> eResult)
+  d2 <- holdDyn Nothing (Just <$> eReservation)
+  let dCombined = zipDynWith (\xs ys -> (xs, ys)) d1 d2
+  let res = fmapMaybe id $ updated $ dCombined <&> \(e1, e2) -> do
+                r <- e1
+                r' <- e2
+                pure (r <> r')
 
   eResultWithTime <- performEvent (res <&> \items -> do
      curTime <- liftIO getCurrentTime
