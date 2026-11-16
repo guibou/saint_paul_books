@@ -352,7 +352,7 @@ widget = do
 
 
       res <- elAttr "table" ("class" =: "books" <> "id" =: "books") $ do
-          listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn (dueDate . (\(_, _, _, x) -> x))) <$> chevalBooks1) $ \_idx d -> do
+          listWithKey ((Map.fromList . zip [0 :: Int ..] . sortOn (status . (\(_, _, _, x) -> x))) <$> chevalBooks1) $ \_idx d -> do
             dyn ((\(_, _, user, book) -> displayBook user book today) <$> d)
 
       -- Merge all the events together
@@ -371,18 +371,24 @@ widget = do
 displayBook :: (PostBuild t m, DomBuilder t m, MonadHold t m, MonadFix m, TriggerEvent t m, PerformEvent t m, MonadIO (Performable m)) => User -> Book -> Dynamic t Day -> m _
 displayBook user book today = do
   el "tr" $ do
-    let remainingDays = diffDays (dueDate book) <$> today
-    let colorClass remainingDays
-          | remainingDays > LoanMaxDays `div` 2 = "" :: Text
-          | remainingDays > 3 = "late-ok"
-          | otherwise = "late-critical"
     selectedBook <- el "td" $ mdo
       (e, _) <- elAttr' "a" ("href" =: ("#details")) $ nerdFontItem "nf-fa-image"
       
       pure (domEvent Click e $> (book, user))
 
     el "td" $ text $ Text.take 1 (displayName user)
-    elDynAttr "td" (("class" =:) . colorClass <$> remainingDays) $ dynText $ (( \remainingDays -> tshow remainingDays <> "d") <$> remainingDays)
+    case status book of
+      DueAt dueDate -> do
+        let remainingDays = diffDays dueDate <$> today
+        let colorClass remainingDays
+              | remainingDays > LoanMaxDays `div` 2 = "" :: Text
+              | remainingDays > 3 = "late-ok"
+              | otherwise = "late-critical"
+        elDynAttr "td" (("class" =:) . colorClass <$> remainingDays) $ dynText $ (( \remainingDays -> tshow remainingDays <> "d") <$> remainingDays)
+      Waiting -> do
+        el "td" $ text "W"
+      Available -> do
+        el "td" $ text "A"
     el "td" $ mdo
       (e, _) <- elDynAttr' "div" (set <&> \b -> if b then Map.singleton "style" "text-decoration-line: line-through" else []) $ text $ title book
       let click = domEvent Click e

@@ -88,10 +88,26 @@ refreshBooks eUser = do
           )
           eAuth
 
-  eResultWithTime <- performEvent (eResult <&> \items -> do
+  eReservation <-
+    fmap switchDyn $
+      widgetHold (return never) $
+        fmap
+          ( \auth -> do
+              ePostBuild <- getPostBuild
+              getReservation auth ePostBuild
+          )
+          eAuth
+
+  d1 <- holdDyn [] eResult
+  d2 <- holdDyn [] eReservation
+  let dCombined = zipDynWith (\xs ys -> (xs <> ys)) d1 d2
+  let res = updated dCombined
+
+  eResultWithTime <- performEvent (res <&> \items -> do
      curTime <- liftIO getCurrentTime
      pure (curTime, items)
      )
+
 
   pure $
     eResultWithTime <&> \(refreshTime, items) ->
@@ -109,6 +125,32 @@ getLoan' Auth {..} triggerEvent = do
           $> iguanaRequest'
             iguanaSession
             "user/loans"
+            [ "sessionId" .= sessionId session,
+              -- Note: most of these keys appears in the query I reverse
+              -- engineered. I'm too lazy to try to remove some of them.
+              "LocationProfile" .= ("" :: Text),
+              "range" .= object ["from" .= (1 :: Int), "to" .= (10 :: Int)],
+              "sort" .= object ["sortBy" .= ("!" :: Text), "sortDirection" .= ("ASC" :: Text)]
+            ]
+      )
+  pure $
+    fmap
+      ( \response -> do
+          case decodeXhrResponse $ response of
+            -- TODO: better error handling
+            Nothing -> []
+            Just (Response (Items items)) -> items
+      )
+      responseEvent
+
+getReservation :: (MonadJSM (Performable m), PerformEvent t m, TriggerEvent t m) => Auth -> Event t a -> m (Event t [Data.Aeson.Value])
+getReservation Auth {..} triggerEvent = do
+  responseEvent <-
+    performRequestAsync
+      ( triggerEvent
+          $> iguanaRequest'
+            iguanaSession
+            "user/reservations"
             [ "sessionId" .= sessionId session,
               -- Note: most of these keys appears in the query I reverse
               -- engineered. I'm too lazy to try to remove some of them.
@@ -152,7 +194,7 @@ renewBook pushLog eBookUser = do
           eAuth
   pure $ eResult <&> \(book, res) -> case res of
        [RenewResponse {success = False, refusalReason}] -> Left refusalReason
-       [RenewResponse {success = True, dueDate = newDueDate}] -> Right (let Book {..} = book in Book {dueDate = newDueDate, ..})
+       [RenewResponse {success = True, dueDate = newDueDate}] -> Right (let Book {..} = book in Book {status = DueAt newDueDate, ..})
        _ -> (Left "Unknown error, see log")
 
 refreshLoan :: 

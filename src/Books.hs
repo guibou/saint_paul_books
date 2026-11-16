@@ -1,8 +1,10 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Books where
 
@@ -15,10 +17,13 @@ import Data.Time.Format (parseTimeM)
 import GHC.Generics
 
 -- | A book loan
+data BookStatus = Available | Waiting | DueAt Day
+  deriving (Show, Generic, Eq, ToJSON, FromJSON, Ord)
+
 data Book = Book
   { title :: Text,
     fullTitle :: Text,
-    dueDate :: Day,
+    status :: BookStatus,
     author :: Text,
     cover :: Text,
     barcode :: Text,
@@ -36,7 +41,18 @@ instance FromJSON JSONBook where
 bookFromJSON :: Value -> Parser Book
 bookFromJSON = withObject "Book" $ \o -> do
   title <- cleanTitle <$> o .: "title"
-  dueDate <- cleanDate =<< o .: "dueDate"
+  dueDateM <- o .:? "dueDate"
+  status <- case dueDateM of
+    Just dueDate -> do
+      due <- cleanDate dueDate
+      pure (DueAt due)
+    Nothing -> do
+      availableSinceM <- o .:? "availableSince"
+      case availableSinceM of
+        Nothing -> pure Waiting
+        Just (v :: Text) -> do
+          pure Available
+
   author <- o .: "author"
   cover <- cleanImage <$> (o .: "image")
   fullTitle <- o .: "title"
