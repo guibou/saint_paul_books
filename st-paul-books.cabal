@@ -119,7 +119,7 @@ executable st-paul-books
     -- Other library packages from which modules are imported.
     build-depends:
         base,
-        reflex-dom-core, text, aeson, time, aeson-pretty, bytestring, async, jsaddle, containers, stm, lens, file-embed
+        reflex-dom-core, text, aeson, time, bytestring, async, jsaddle, containers, stm, lens, file-embed
         -- jsaddle-warp for local dev?
     build-depends:    base, aeson, text, time, async, bytestring
     -- Directories containing source files.
@@ -127,4 +127,4 @@ executable st-paul-books
 
     -- Base language which the package is written in.
     default-language: Haskell2010
-    ghc-options: -with-rtsopts=-N -threaded -Wunused-packages
+    ghc-options: -with-rtsopts=-N -threaded -Wunused-packages -O

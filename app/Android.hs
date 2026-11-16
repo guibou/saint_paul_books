@@ -25,7 +25,6 @@ import Control.Monad (join, void)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson
-import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.ByteString.Char8 (ByteString)
 import Data.FileEmbed
 import Data.Functor (($>), (<&>))
@@ -421,7 +420,7 @@ settingsPanel settingsDyn = do
             ( def
                 & textAreaElementConfig_initialValue
                 -- TODO: maybe remove encode pretty ;)
-                .~ (toStrict $ decodeUtf8 $ encodePretty credentials)
+                .~ (toStrict $ decodeUtf8 $ encode credentials)
                 & textAreaElementConfig_elementConfig
                 . elementConfig_initialAttributes
                 .~ []
